@@ -1,0 +1,32 @@
+{
+  "name": "kids-church-log",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:lead": "npm run dev --workspace @kcl/ministry-lead",
+    "build:lead": "npm run build --workspace @kcl/ministry-lead",
+    "bootstrap:lead": "node scripts/bootstrap-ministry-lead.mjs",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:rules": "firebase emulators:exec --only firestore --project kidschurchlog-app \"npm run test:rules:unit\"",
+    "test:rules:unit": "vitest run tests/firestore.rules.test.ts",
+    "emulators": "firebase emulators:start --only firestore,auth"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase-admin": "^13.4.0",
+    "firebase-tools": "^14.12.0"
+  },
+  "engines": {
+    "node": ">=20.0.0 <21"
+  },
+  "overrides": {
+    "postcss": "8.5.19"
+  },
+  "packageManager": "npm@10.7.0"
+}

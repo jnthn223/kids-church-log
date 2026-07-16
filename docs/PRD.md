@@ -201,6 +201,8 @@ Firebase Authentication supports:
 
 Authentication creates an identity only. It does not grant ministry access.
 
+Email/password account creation is a separate request-access flow, never an alternative behavior of the Sign in button. It collects full name, email, ministry responsibility, and a short access reason; requires password confirmation and email verification; and still leaves the identity Pending. Passwords must contain 12–128 characters, avoid known weak patterns, and either use at least three character categories or form a passphrase of at least 16 characters. The form shows an accessible live requirements checklist. Google supplies verified identity basics on first sign-in, after which a Ministry Lead may request clarification before approval.
+
 ### 6.2 Ministry membership states
 
 | State | Meaning | Application behavior |
@@ -249,14 +251,15 @@ Assignment labels are operational descriptions rather than authorization roles. 
 
 ### 6.6 Access lifecycle
 
-1. User authenticates for the first time.
-2. The client creates or refreshes a minimal access request owned by that user.
-3. The user sees Pending Approval.
-4. A Ministry Lead reviews the request and assigns Admin Volunteer, Kids Church Volunteer, or both, with a membership expiry date.
-5. Granting Ministry Lead requires a separate explicit action, reason, and warning; it is never the default approval choice.
-6. The approved user refreshes or signs in again and receives only the applications and navigation permitted by their roles.
-7. Membership access stops when suspended, revoked, or expired, even if an old application tab remains open.
-8. Renewal requires another active Ministry Lead and writes an audit event; users cannot renew themselves.
+1. A user authenticates for the first time or creates an email/password identity and verifies the email.
+2. Account creation asks for the user’s full name, ministry responsibility, and access reason, then creates an access request owned by that user. Authentication alone never grants access.
+3. If authentication succeeds but no request exists—for example, because the request write was interrupted—the verified user sees Complete Access Request and supplies the missing context. The client never silently creates a blank request.
+4. The user sees Pending Approval only after a complete request exists.
+5. A Ministry Lead reviews the request and assigns Admin Volunteer, Kids Church Volunteer, or both, with a membership expiry date.
+6. Granting Ministry Lead requires a separate explicit action, reason, and warning; it is never the default approval choice.
+7. The approved user refreshes or signs in again and receives only the applications and navigation permitted by their roles.
+8. Membership access stops when suspended, revoked, or expired, even if an old application tab remains open.
+9. Renewal requires another active Ministry Lead and writes an audit event; users cannot renew themselves.
 
 ### 6.7 First Ministry Lead
 
@@ -269,6 +272,7 @@ The first Ministry Lead is provisioned manually through Firebase Console during 
 - Expiry is enforced by Firestore rules using `request.time`, membership status, and `expiresAt`; it is not merely a UI reminder.
 - The Ministry Lead application shows reviews due within 30 days, recently inactive users, expired users, and accounts with no recent assignments.
 - Inactivity is a review signal, not proof that a person has left. Suspension or non-renewal remains an explicit accountable decision.
+- Suspension disables authorization but preserves assigned roles for accountable restoration. A suspended Ministry Lead is removed from the active governance roster; renewal by another Lead restores that roster entry atomically. Legacy suspended records with no roles require an explicit role-recovery choice during renewal.
 - Access review records who reviewed each membership, when, the outcome, the new expiry, and any reason.
 
 ### 6.9 Offboarding and succession
@@ -369,7 +373,7 @@ Mobile Ministry Lead uses a compact header and explicit menu rather than copying
 
 **Purpose:** Authenticate a Ministry Lead.
 
-**Content:** Brand mark, email/password, Google sign-in, password reset, ministry-focused copy.
+**Content:** Brand mark, email/password, Google sign-in, password reset, ministry-focused copy, and a distinct Create account and request access link.
 
 **Flow:** An active, unexpired Ministry Lead proceeds to Overview. Other roles see wrong-application guidance; pending sees Pending Approval; expired access shows renewal guidance.
 
@@ -497,7 +501,7 @@ Mobile Ministry Lead uses a compact header and explicit menu rather than copying
 
 **Access:** Ministry Lead.
 
-**Content:** Name, short label, optional age guidance, display order, active state, current child count.
+**Content:** Familiar ministry name such as Small Kids or Big Kids, short label, optional age guidance, display order, active state, current child count.
 
 **Actions:** Create, rename, reorder, disable, merge, split.
 
@@ -513,7 +517,7 @@ Mobile Ministry Lead uses a compact header and explicit menu rather than copying
 
 **Access:** Ministry Lead.
 
-**Fields:** Name, building/area, optional capacity, accessibility notes, active state.
+**Fields:** Familiar physical-space name such as Purple Room or Green Room, building/area, optional capacity, accessibility notes, active state.
 
 **Actions:** Create, edit, disable.
 
@@ -583,7 +587,7 @@ Mobile Ministry Lead uses a compact header and explicit menu rather than copying
 
 **Events:** Role changes, membership status, pass issue/replace/disable, household deactivation, guardian pickup changes, child safety changes, attendance corrections, session close/reopen.
 
-**Behavior:** Read-only, filterable, immutable to clients after creation.
+**Behavior:** Read-only and immutable to clients after creation. The Ministry Lead can search action, actor, target, reason, or application source; filter by action and actor; sort by date, action, actor, or target in either direction; and export the currently filtered and sorted result set as CSV. The initial client query is bounded to the 250 most recent events and the UI discloses the loaded-result count.
 
 ---
 
@@ -918,9 +922,9 @@ An Active membership is authorized only while `expiresAt` is in the future. Rene
 
 Pending authenticated users.
 
-Fields: UID, email, display name, provider IDs, requested application, status, requested at, reviewed at/by.
+Fields: UID, email, display name, provider IDs, requested application, ministry-responsibility context, access reason, status, requested at, reviewed at/by.
 
-The user may create/read their own request but cannot set approved roles.
+The user may create/read their own request but cannot set approved roles. A request produced by the normal application flow requires both ministry-responsibility context and an access reason. A verified identity with no request is treated as an incomplete application and routed to Complete Access Request, not Pending Approval.
 
 #### `ministries/{ministryId}/households/{householdId}`
 
@@ -956,13 +960,15 @@ Readable only by Ministry Leads and Admin Volunteers during authorized pass issu
 
 #### `ministries/{ministryId}/ministryGroups/{groupId}`
 
-Fields: name, short label, optional minimum/maximum age guidance, display order, active state, merged-into ID where applicable.
+Fields: name, optional short label, optional minimum/maximum age guidance, display order, active state, merged-into ID where applicable.
 
 #### `ministries/{ministryId}/rooms/{roomId}`
 
 Fields: name, building/area, capacity, accessibility notes, display order, active state.
 
 No permanent group ID exists on a room.
+
+Ministry Leads may edit groups and rooms. Deletion is implemented as an audited `active: false` soft delete so historical service, assignment, and attendance references remain valid. Inactive values are excluded from new operational assignments but remain visible to Ministry Leads and can be restored.
 
 #### `ministries/{ministryId}/serviceSchedules/{scheduleId}`
 

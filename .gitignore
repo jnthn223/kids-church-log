@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Next.js and package build output
+.next/
+out/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.eslintcache
+
+# Local environment configuration
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Firebase local state and emulator output
+.firebase/
+firebase-export-*/
+*-debug.log
+*.log
+
+# Privileged Firebase / Google credentials must never enter the repository
+service-account*.json
+serviceAccount*.json
+*-firebase-adminsdk-*.json
+application_default_credentials.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Hosting and monorepo caches
+.vercel/
+.turbo/
+
+# Operating-system and editor metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
