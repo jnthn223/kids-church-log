@@ -52,11 +52,36 @@ service cloud.firestore {
       }
       match /settings/{settingId} { allow read: if active(ministryId); allow create, update: if lead(ministryId) && request.resource.data.updatedBy == request.auth.uid; allow delete: if false; }
 
-      match /households/{id} { allow read: if lead(ministryId) || adminVolunteer(ministryId); allow create, update: if lead(ministryId) || adminVolunteer(ministryId); allow delete: if false; }
-      match /guardians/{id} { allow read: if lead(ministryId) || adminVolunteer(ministryId); allow create, update: if lead(ministryId) || adminVolunteer(ministryId); allow delete: if false; }
-      match /children/{id} { allow read: if lead(ministryId) || adminVolunteer(ministryId); allow create, update: if lead(ministryId) || adminVolunteer(ministryId); allow delete: if false; }
-      match /familyPassSecrets/{id} { allow read, create, update: if lead(ministryId) || adminVolunteer(ministryId); allow delete: if false; }
-      match /familyPasses/{tokenHash} { allow get: if team(ministryId); allow list: if lead(ministryId) || adminVolunteer(ministryId); allow create, update: if lead(ministryId) || adminVolunteer(ministryId); allow delete: if false; }
+      match /households/{id} {
+        allow read: if lead(ministryId) || adminVolunteer(ministryId);
+        allow create: if (lead(ministryId) || adminVolunteer(ministryId)) && request.resource.data.active == true && request.resource.data.passStatus == 'ACTIVE' && request.resource.data.createdBy == request.auth.uid && request.resource.data.updatedBy == request.auth.uid;
+        allow update: if lead(ministryId) || (adminVolunteer(ministryId) && request.resource.data.active == resource.data.active && request.resource.data.passStatus == resource.data.passStatus && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.updatedBy == request.auth.uid);
+        allow delete: if false;
+      }
+      match /guardians/{id} {
+        allow read: if lead(ministryId) || adminVolunteer(ministryId);
+        allow create: if (lead(ministryId) || adminVolunteer(ministryId)) && request.resource.data.active == true && request.resource.data.createdBy == request.auth.uid && request.resource.data.updatedBy == request.auth.uid;
+        allow update: if lead(ministryId) || (adminVolunteer(ministryId) && request.resource.data.active == resource.data.active && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.updatedBy == request.auth.uid);
+        allow delete: if false;
+      }
+      match /children/{id} {
+        allow read: if lead(ministryId) || adminVolunteer(ministryId);
+        allow create: if (lead(ministryId) || adminVolunteer(ministryId)) && request.resource.data.active == true && request.resource.data.createdBy == request.auth.uid && request.resource.data.updatedBy == request.auth.uid;
+        allow update: if lead(ministryId) || (adminVolunteer(ministryId) && request.resource.data.active == resource.data.active && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.updatedBy == request.auth.uid);
+        allow delete: if false;
+      }
+      match /familyPassSecrets/{id} {
+        allow read: if lead(ministryId) || adminVolunteer(ministryId);
+        allow create: if (lead(ministryId) || adminVolunteer(ministryId)) && request.resource.data.status == 'ACTIVE' && request.resource.data.createdBy == request.auth.uid && request.resource.data.updatedBy == request.auth.uid;
+        allow update: if lead(ministryId) || (adminVolunteer(ministryId) && resource.data.status == 'ACTIVE' && request.resource.data.status == 'ACTIVE' && request.resource.data.householdId == resource.data.householdId && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.updatedBy == request.auth.uid);
+        allow delete: if false;
+      }
+      match /familyPasses/{tokenHash} {
+        allow get: if team(ministryId); allow list: if lead(ministryId) || adminVolunteer(ministryId);
+        allow create: if (lead(ministryId) || adminVolunteer(ministryId)) && request.resource.data.status == 'ACTIVE' && request.resource.data.issuedBy == request.auth.uid;
+        allow update: if lead(ministryId) || (adminVolunteer(ministryId) && resource.data.status == 'ACTIVE' && request.resource.data.status == 'REPLACED' && request.resource.data.householdId == resource.data.householdId && request.resource.data.replacedBy == request.auth.uid && request.resource.data.replacementHash is string);
+        allow delete: if false;
+      }
 
       match /ministryGroups/{id} { allow read: if active(ministryId); allow create, update: if lead(ministryId); allow delete: if false; }
       match /rooms/{id} { allow read: if active(ministryId); allow create, update: if lead(ministryId); allow delete: if false; }

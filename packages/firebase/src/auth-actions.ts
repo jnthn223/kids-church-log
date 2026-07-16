@@ -30,7 +30,8 @@ export async function resetPassword(email: string) {
 }
 
 export async function createEmailAccessAccount(
-  values: AccessRequestDetails & { email: string; password: string }
+  values: AccessRequestDetails & { email: string; password: string },
+  requestedApplication = "MINISTRY_LEAD"
 ) {
   const passwordError = passwordValidationError(values.password);
   if (passwordError) throw new Error(passwordError);
@@ -58,7 +59,7 @@ export async function createEmailAccessAccount(
         displayName: values.displayName,
         ministryResponsibility: values.ministryResponsibility,
         requestReason: values.requestReason
-      })
+      }, requestedApplication)
     );
   } catch {
     // Authentication has already succeeded. The verified user will be routed to
@@ -68,7 +69,10 @@ export async function createEmailAccessAccount(
   return credential.user;
 }
 
-export async function submitAccessRequestDetails(values: AccessRequestDetails) {
+export async function submitAccessRequestDetails(
+  values: AccessRequestDetails,
+  requestedApplication = "MINISTRY_LEAD"
+) {
   const user = getFirebaseAuth().currentUser;
   if (!user) throw new Error("Sign in before completing the request.");
 
@@ -93,7 +97,7 @@ export async function submitAccessRequestDetails(values: AccessRequestDetails) {
       email: user.email?.toLowerCase() || "",
       providerIds: user.providerData.map((provider) => provider.providerId),
       ...values
-    })
+    }, requestedApplication)
   );
 }
 
@@ -108,14 +112,15 @@ function accessRequestRef(uid: string) {
 }
 
 function accessRequestData(
-  values: AccessRequestDetails & { uid: string; email: string; providerIds: string[] }
+  values: AccessRequestDetails & { uid: string; email: string; providerIds: string[] },
+  requestedApplication: string
 ) {
   return {
     uid: values.uid,
     email: values.email,
     displayName: values.displayName,
     providerIds: values.providerIds,
-    requestedApplication: "MINISTRY_LEAD",
+    requestedApplication,
     ministryResponsibility: values.ministryResponsibility,
     requestReason: values.requestReason,
     status: "PENDING",

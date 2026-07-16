@@ -18,6 +18,7 @@ beforeEach(async () => {
     await setDoc(doc(db, "ministries", ministryId, "members", "lead"), { userId: "lead", displayName: "Lead", email: "lead@example.org", roles: ["MINISTRY_LEAD"], status: "ACTIVE", expiresAt: future });
     await setDoc(doc(db, "ministries", ministryId, "members", "expired"), { userId: "expired", displayName: "Expired", email: "expired@example.org", roles: ["MINISTRY_LEAD"], status: "ACTIVE", expiresAt: past });
     await setDoc(doc(db, "ministries", ministryId, "members", "kids"), { userId: "kids", displayName: "Kids Volunteer", email: "kids@example.org", roles: ["KIDS_CHURCH_VOLUNTEER"], status: "ACTIVE", expiresAt: future });
+    await setDoc(doc(db, "ministries", ministryId, "members", "admin"), { userId: "admin", displayName: "Admin Volunteer", email: "admin@example.org", roles: ["ADMIN_VOLUNTEER"], status: "ACTIVE", expiresAt: future });
     await setDoc(doc(db, "ministries", ministryId, "members", "legacy-suspended"), { userId: "legacy-suspended", displayName: "Legacy Suspended Lead", email: "legacy@example.org", roles: [], status: "SUSPENDED", expiresAt: past });
     await setDoc(doc(db, "ministries", ministryId, "settings", "accessGovernance"), { assignedMinistryLeadIds: ["lead"], minimumActiveLeadTarget: 2, leadReviewIntervalDays: 150, accessReviewWarningDays: 30, updatedBy: "lead" });
     await setDoc(doc(db, "ministries", ministryId, "households", "family"), { householdName: "Family", active: true });
@@ -44,6 +45,20 @@ describe("Firestore ministry boundaries", () => {
   it("keeps Kids Church Volunteer child access closed until its operational rules exist", async () => {
     const db = env.authenticatedContext("kids", { email: "kids@example.org", email_verified: true }).firestore();
     await assertFails(getDoc(doc(db, "ministries", ministryId, "children", "child")));
+  });
+
+  it("allows an Admin Volunteer to create an active family but not deactivate it", async () => {
+    const db = env.authenticatedContext("admin", { email: "admin@example.org", email_verified: true }).firestore();
+    const familyRef = doc(db, "ministries", ministryId, "households", "new-family");
+    await assertSucceeds(setDoc(familyRef, { householdName: "New Family", active: true, passStatus: "ACTIVE", createdBy: "admin", updatedBy: "admin" }));
+    await assertFails(updateDoc(familyRef, { active: false, updatedBy: "admin" }));
+  });
+
+  it("prevents an Admin Volunteer from administratively disabling a pass", async () => {
+    await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "ministries", ministryId, "familyPasses", "hash"), { householdId: "family", status: "ACTIVE", issuedBy: "admin" }));
+    const db = env.authenticatedContext("admin", { email: "admin@example.org", email_verified: true }).firestore();
+    await assertFails(updateDoc(doc(db, "ministries", ministryId, "familyPasses", "hash"), { status: "DISABLED", replacedBy: "admin", replacementHash: "other" }));
+    await assertSucceeds(updateDoc(doc(db, "ministries", ministryId, "familyPasses", "hash"), { status: "REPLACED", replacedBy: "admin", replacementHash: "other" }));
   });
 
   it("prevents a Ministry Lead from renewing themselves", async () => {

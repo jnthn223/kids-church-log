@@ -1,0 +1,11 @@
+{
+  "name": "@kcl/admin-volunteer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": { "dev": "next dev --port 3001", "build": "next build", "lint": "eslint . --max-warnings=0", "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@kcl/firebase": "0.1.0", "@kcl/types": "0.1.0", "@kcl/ui": "0.1.0", "@kcl/validation": "0.1.0",
+    "firebase": "^11.10.0", "lucide-react": "^0.468.0", "next": "15.5.20", "qrcode": "^1.5.4", "react": "18.3.1", "react-dom": "18.3.1", "zod": "^3.25.76"
+  },
+  "devDependencies": { "@types/node": "^20.19.9", "@types/qrcode": "^1.5.5", "@types/react": "^18.3.23", "@types/react-dom": "^18.3.7", "eslint": "^8.57.1", "eslint-config-next": "15.5.20", "postcss": "8.5.19", "typescript": "^5.8.3" }
+}

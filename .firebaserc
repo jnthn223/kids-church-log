@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "kidschurchlog-app"
-  }
+  },
+  "targets": {
+    "kidschurchlog-app": {
+      "hosting": {
+        "lead": [
+          "kidschurchlog-app"
+        ],
+        "admin": [
+          "kidschurchlog-register"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

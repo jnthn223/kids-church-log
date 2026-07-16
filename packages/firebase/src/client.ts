@@ -2,7 +2,16 @@ import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 
-const firebaseConfig = {
+export type FirebaseClientConfig = {
+  apiKey?: string;
+  authDomain?: string;
+  projectId?: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId?: string;
+};
+
+let firebaseConfig: FirebaseClientConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
@@ -10,6 +19,11 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
+
+export function configureFirebaseClient(config: FirebaseClientConfig) {
+  if (app) return;
+  firebaseConfig = { ...firebaseConfig, ...config };
+}
 
 export const ministryId = process.env.NEXT_PUBLIC_MINISTRY_ID || "kidschurch";
 

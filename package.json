@@ -8,7 +8,11 @@
   ],
   "scripts": {
     "dev:lead": "npm run dev --workspace @kcl/ministry-lead",
+    "dev:admin": "npm run dev --workspace @kcl/admin-volunteer",
     "build:lead": "npm run build --workspace @kcl/ministry-lead",
+    "build:admin": "npm run build --workspace @kcl/admin-volunteer",
+    "deploy:lead": "npm run build:lead && firebase deploy --only hosting:lead",
+    "deploy:admin": "npm run build:admin && firebase deploy --only hosting:admin",
     "bootstrap:lead": "node scripts/bootstrap-ministry-lead.mjs",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",

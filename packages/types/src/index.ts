@@ -33,6 +33,9 @@ export interface Room { id: string; name: string; buildingArea?: string; capacit
 export interface ServiceSchedule { id: string; name: string; weekday: number; startTime: string; endTime?: string; checkInOpeningOffset: number; displayOrder: number; active: boolean; }
 export interface ServiceSession { id: string; localServiceDate: string; scheduleId: string; scheduleName: string; status: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED"; }
 export interface Household { id: string; householdName: string; primaryGuardianName?: string; childIds?: string[]; active: boolean; passStatus?: string; lastAttendanceAt?: unknown; }
-export interface Child { id: string; householdId: string; firstName: string; lastName: string; preferredName?: string; birthdate?: string; ministryGroupId?: string; allergies?: string; assistanceNotes?: string; active: boolean; }
+export interface Guardian { id: string; householdId: string; fullName: string; phone: string; email?: string; relationship: string; linkedChildIds: string[]; authorizedPickup: boolean; emergencyContact: boolean; active: boolean; }
+export interface Child { id: string; householdId: string; firstName: string; lastName: string; preferredName?: string; birthdate?: string; ministryGroupId?: string; allergies?: string; medicalNotes?: string; assistanceNotes?: string; authorizedGuardianIds?: string[]; active: boolean; }
+export type FamilyPassStatus = "ACTIVE" | "LOST" | "REPLACED" | "DISABLED";
+export interface FamilyPassSecret { id: string; currentOpaqueToken: string; formattedDisplayKey: string; tokenHash: string; householdId: string; status: FamilyPassStatus; issuedAt?: unknown; }
 export interface Attendance { id: string; childNameSnapshot: string; householdNameSnapshot: string; localServiceDate?: string; groupNameSnapshot: string; roomNameSnapshot: string; status: "CHECKED_IN" | "CHECKED_OUT"; checkInAt?: unknown; checkOutAt?: unknown; }
 export interface AuditLog { id: string; eventType: string; actorName: string; targetCollection: string; targetId: string; timestamp?: unknown; reason?: string; applicationSource: string; }

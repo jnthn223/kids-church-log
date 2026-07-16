@@ -4,14 +4,15 @@ KidsChurchLog is a Spark-first children’s-ministry operations platform. The pr
 
 ## Current development phase
 
-This repository currently contains the shared Phase 0 foundation and the first independent application:
+This repository currently contains the shared foundation and two independent applications:
 
 - `apps/ministry-lead` — oversight, access governance, configuration, attendance history, and reporting.
+- `apps/admin-volunteer` — assisted family registration, ordinary record maintenance, and Family Pass issue/reissue.
 - `packages/firebase` — Firebase client initialization, access state, queries, and audited transactions.
 - `packages/ui` — shared brand and presentation primitives.
 - `packages/types`, `packages/validation`, and `packages/utils` — framework-neutral shared code.
 
-The Admin Volunteer and Kids Church Volunteer applications have not been scaffolded yet.
+The Kids Church Volunteer application has not been scaffolded yet.
 
 ### Source organization
 
@@ -26,9 +27,9 @@ Keep route files thin, keep Firestore writes in the shared Firebase package, and
 
 1. Use Node.js 20 (`nvm use` reads the repository’s `.nvmrc`).
 2. Run `npm install`.
-3. Copy the Firebase web configuration into `apps/ministry-lead/.env.local` using `apps/ministry-lead/.env.example` as the key list.
+3. Copy the Firebase web configuration into the application-specific `.env.local`, using that app’s `.env.example` as the key list.
 4. Set `NEXT_PUBLIC_MINISTRY_ID` to the Firestore ministry document ID. Local development defaults to `kidschurch` when it is omitted.
-5. Run `npm run dev:lead` and open `http://localhost:3000`.
+5. Run `npm run dev:lead` for Ministry Lead on port 3000, or `npm run dev:admin` for Admin Volunteer on port 3001.
 
 Root `.env.local` is retained only as a migration source from the earlier prototype. Application-specific environment files are authoritative going forward.
 
@@ -94,6 +95,14 @@ npm run lint
 npm run typecheck
 npm test
 npm run build:lead
+npm run build:admin
+npm run deploy:lead
+npm run deploy:admin
 ```
 
-`firebase.json` deploys the static export from `apps/ministry-lead/out` to the existing `kidschurchlog-app` Hosting site and deploys Firestore rules/indexes. No Cloud Functions, Admin SDK runtime, Cloud Run, App Hosting, or Blaze-only service is used.
+Firebase Hosting uses two independently deployable targets:
+
+- `lead` → `kidschurchlog-app` → `apps/ministry-lead/out`
+- `admin` → `kidschurchlog-register` → `apps/admin-volunteer/out`
+
+The Admin Volunteer site’s default URL is `https://kidschurchlog-register.web.app`. Firestore rules and indexes remain shared by both applications. No Cloud Functions, Admin SDK runtime, Cloud Run, App Hosting, or Blaze-only service is used.

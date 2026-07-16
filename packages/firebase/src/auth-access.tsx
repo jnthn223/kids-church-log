@@ -17,9 +17,15 @@ import {
   type User
 } from "firebase/auth";
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc, type DocumentData } from "firebase/firestore";
-import type { MinistryMember } from "@kcl/types";
+import type { MinistryMember, MinistryRole } from "@kcl/types";
 import { isExpired } from "@kcl/utils";
-import { getFirebaseAuth, getFirebaseDb, ministryId } from "./client";
+import {
+  configureFirebaseClient,
+  getFirebaseAuth,
+  getFirebaseDb,
+  ministryId,
+  type FirebaseClientConfig
+} from "./client";
 
 export type AccessState =
   | "LOADING"
@@ -57,12 +63,12 @@ function memberFrom(id: string, data: DocumentData): MinistryMember {
   };
 }
 
-function stateForMember(member: MinistryMember): AccessState {
+function stateForMember(member: MinistryMember, requiredRole: MinistryRole): AccessState {
   if (member.status === "SUSPENDED") return "SUSPENDED";
   if (member.status === "REVOKED") return "REVOKED";
   if (member.status !== "ACTIVE") return "PENDING";
   if (isExpired(member.expiresAt)) return "EXPIRED";
-  if (!member.roles.includes("MINISTRY_LEAD")) return "WRONG_ROLE";
+  if (!member.roles.includes(requiredRole)) return "WRONG_ROLE";
   return "ACTIVE";
 }
 
@@ -87,7 +93,16 @@ async function syncUserProfile(user: User) {
   );
 }
 
-export function AuthAccessProvider({ children }: { children: ReactNode }) {
+export function AuthAccessProvider({
+  children,
+  requiredRole = "MINISTRY_LEAD",
+  firebaseConfig
+}: {
+  children: ReactNode;
+  requiredRole?: MinistryRole;
+  firebaseConfig?: FirebaseClientConfig;
+}) {
+  if (firebaseConfig) configureFirebaseClient(firebaseConfig);
   const [user, setUser] = useState<User | null>(null);
   const [member, setMember] = useState<MinistryMember | null>(null);
   const [state, setState] = useState<AccessState>("LOADING");
@@ -123,12 +138,12 @@ export function AuthAccessProvider({ children }: { children: ReactNode }) {
 
       const nextMember = memberFrom(snapshot.id, snapshot.data());
       setMember(nextMember);
-      setState(stateForMember(nextMember));
+      setState(stateForMember(nextMember, requiredRole));
       setError(null);
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : "MEMBERSHIP_UNAVAILABLE");
     }
-  }, []);
+  }, [requiredRole]);
 
   useEffect(() => {
     let unsubscribeMembership: (() => void) | undefined;
@@ -180,7 +195,7 @@ export function AuthAccessProvider({ children }: { children: ReactNode }) {
 
             const nextMember = memberFrom(snapshot.id, snapshot.data());
             setMember(nextMember);
-            setState(stateForMember(nextMember));
+            setState(stateForMember(nextMember, requiredRole));
           },
           (snapshotError) => {
             setError(snapshotError.code || "MEMBERSHIP_UNAVAILABLE");
@@ -197,7 +212,7 @@ export function AuthAccessProvider({ children }: { children: ReactNode }) {
       setError(setupError instanceof Error ? setupError.message : "AUTH_UNAVAILABLE");
       setState("ERROR");
     }
-  }, []);
+  }, [requiredRole]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
