@@ -16,6 +16,9 @@ service cloud.firestore {
     function validMember(data, uid) { return data.userId == uid && data.status in ['ACTIVE', 'SUSPENDED', 'REVOKED'] && ((data.status == 'ACTIVE' && validRoles(data.roles) && validExpiry(data)) || (data.status != 'ACTIVE' && validInactiveRoles(data.roles))); }
     function governanceAfter(ministryId) { return getAfter(/databases/$(database)/documents/ministries/$(ministryId)/settings/accessGovernance).data; }
     function leadRosterMatches(ministryId, uid, roles) { return (('MINISTRY_LEAD' in roles) == (uid in governanceAfter(ministryId).assignedMinistryLeadIds)) && governanceAfter(ministryId).assignedMinistryLeadIds.size() > 0; }
+    function openSession(ministryId, sessionId) { return get(/databases/$(database)/documents/ministries/$(ministryId)/serviceSessions/$(sessionId)).data.status == 'OPEN'; }
+    function validVolunteerCheckIn(ministryId, attendanceId) { return request.resource.data.keys().hasAll(['childId','childNameSnapshot','householdId','householdNameSnapshot','sessionId','scheduleId','scheduleNameSnapshot','localServiceDate','groupId','groupNameSnapshot','roomId','roomNameSnapshot','status','checkInAt','checkInBy','checkInMethod']) && attendanceId == request.resource.data.sessionId + '_' + request.resource.data.childId && request.resource.data.status == 'CHECKED_IN' && request.resource.data.checkInBy == request.auth.uid && request.resource.data.checkInAt == request.time && request.resource.data.checkInMethod in ['QR','MANUAL','NFC'] && request.resource.data.childNameSnapshot is string && request.resource.data.householdNameSnapshot is string && request.resource.data.groupId is string && request.resource.data.roomId is string && openSession(ministryId, request.resource.data.sessionId) && get(/databases/$(database)/documents/ministries/$(ministryId)/households/$(request.resource.data.householdId)).data.active == true && get(/databases/$(database)/documents/ministries/$(ministryId)/children/$(request.resource.data.childId)).data.active == true && get(/databases/$(database)/documents/ministries/$(ministryId)/children/$(request.resource.data.childId)).data.householdId == request.resource.data.householdId; }
+    function validVolunteerCheckOut(ministryId) { return resource.data.status == 'CHECKED_IN' && request.resource.data.status == 'CHECKED_OUT' && openSession(ministryId, resource.data.sessionId) && request.resource.data.checkOutBy == request.auth.uid && request.resource.data.checkOutAt == request.time && request.resource.data.checkOutMethod in ['QR','MANUAL','NFC'] && request.resource.data.releasedToGuardianId is string && request.resource.data.releasedToName is string && request.resource.data.releasedToGuardianId in get(/databases/$(database)/documents/ministries/$(ministryId)/children/$(resource.data.childId)).data.authorizedGuardianIds && get(/databases/$(database)/documents/ministries/$(ministryId)/guardians/$(request.resource.data.releasedToGuardianId)).data.active == true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','checkOutAt','checkOutBy','checkOutMethod','releasedToGuardianId','releasedToName','checkoutNote']); }
 
     match /users/{uid} {
       allow get: if signedIn() && request.auth.uid == uid;
@@ -53,19 +56,19 @@ service cloud.firestore {
       match /settings/{settingId} { allow read: if active(ministryId); allow create, update: if lead(ministryId) && request.resource.data.updatedBy == request.auth.uid; allow delete: if false; }
 
       match /households/{id} {
-        allow read: if lead(ministryId) || adminVolunteer(ministryId);
+        allow read: if lead(ministryId) || adminVolunteer(ministryId) || kidsVolunteer(ministryId);
         allow create: if (lead(ministryId) || adminVolunteer(ministryId)) && request.resource.data.active == true && request.resource.data.passStatus == 'ACTIVE' && request.resource.data.createdBy == request.auth.uid && request.resource.data.updatedBy == request.auth.uid;
         allow update: if lead(ministryId) || (adminVolunteer(ministryId) && request.resource.data.active == resource.data.active && request.resource.data.passStatus == resource.data.passStatus && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.updatedBy == request.auth.uid);
         allow delete: if false;
       }
       match /guardians/{id} {
-        allow read: if lead(ministryId) || adminVolunteer(ministryId);
+        allow read: if lead(ministryId) || adminVolunteer(ministryId) || kidsVolunteer(ministryId);
         allow create: if (lead(ministryId) || adminVolunteer(ministryId)) && request.resource.data.active == true && request.resource.data.createdBy == request.auth.uid && request.resource.data.updatedBy == request.auth.uid;
         allow update: if lead(ministryId) || (adminVolunteer(ministryId) && request.resource.data.active == resource.data.active && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.updatedBy == request.auth.uid);
         allow delete: if false;
       }
       match /children/{id} {
-        allow read: if lead(ministryId) || adminVolunteer(ministryId);
+        allow read: if lead(ministryId) || adminVolunteer(ministryId) || kidsVolunteer(ministryId);
         allow create: if (lead(ministryId) || adminVolunteer(ministryId)) && request.resource.data.active == true && request.resource.data.authorizedGuardianIds is list && request.resource.data.authorizedGuardianIds.size() >= 1 && request.resource.data.createdBy == request.auth.uid && request.resource.data.updatedBy == request.auth.uid;
         allow update: if lead(ministryId) || (adminVolunteer(ministryId) && request.resource.data.active == resource.data.active && request.resource.data.authorizedGuardianIds is list && request.resource.data.authorizedGuardianIds.size() >= 1 && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.updatedBy == request.auth.uid);
         allow delete: if false;
@@ -90,7 +93,12 @@ service cloud.firestore {
         match /roomAssignments/{assignmentId} { allow read: if active(ministryId); allow create, update: if lead(ministryId); allow delete: if false; }
         match /volunteerAssignments/{assignmentId} { allow read: if active(ministryId); allow create, update: if lead(ministryId); allow delete: if false; }
       }
-      match /attendance/{id} { allow read, create, update: if lead(ministryId); allow delete: if false; }
+      match /attendance/{id} {
+        allow read: if lead(ministryId) || kidsVolunteer(ministryId);
+        allow create: if lead(ministryId) || (kidsVolunteer(ministryId) && validVolunteerCheckIn(ministryId, id));
+        allow update: if lead(ministryId) || (kidsVolunteer(ministryId) && validVolunteerCheckOut(ministryId));
+        allow delete: if false;
+      }
       match /auditLogs/{id} { allow read: if lead(ministryId); allow create: if active(ministryId) && request.resource.data.actorUid == request.auth.uid && request.resource.data.applicationSource in ['MINISTRY_LEAD','ADMIN_VOLUNTEER','KIDS_CHURCH_VOLUNTEER']; allow update, delete: if false; }
     }
   }

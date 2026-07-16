@@ -5,3 +5,4 @@ export * from "./collection";
 export * from "./membership-actions";
 export * from "./ministry-documents";
 export * from "./family-registration";
+export * from "./volunteer-operations";

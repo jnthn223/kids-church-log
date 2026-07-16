@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, Timestamp, updateDoc, writeBatch } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from "firebase/firestore";
 
 const projectId = "kidschurchlog-app";
 const ministryId = "kidschurch";
@@ -23,6 +23,12 @@ beforeEach(async () => {
     await setDoc(doc(db, "ministries", ministryId, "settings", "accessGovernance"), { assignedMinistryLeadIds: ["lead"], minimumActiveLeadTarget: 2, leadReviewIntervalDays: 150, accessReviewWarningDays: 30, updatedBy: "lead" });
     await setDoc(doc(db, "ministries", ministryId, "households", "family"), { householdName: "Family", active: true });
     await setDoc(doc(db, "ministries", ministryId, "children", "child"), { firstName: "Child", active: true });
+    await setDoc(doc(db, "ministries", ministryId, "households", "operational-family"), { householdName: "Operational Family", active: true, childIds: ["operational-child"], guardianIds: ["guardian"] });
+    await setDoc(doc(db, "ministries", ministryId, "children", "operational-child"), { householdId: "operational-family", firstName: "Operational", lastName: "Child", active: true, authorizedGuardianIds: ["guardian"] });
+    await setDoc(doc(db, "ministries", ministryId, "guardians", "guardian"), { householdId: "operational-family", fullName: "Guardian", active: true });
+    await setDoc(doc(db, "ministries", ministryId, "guardians", "other-guardian"), { householdId: "operational-family", fullName: "Other Guardian", active: true });
+    await setDoc(doc(db, "ministries", ministryId, "familyPasses", "pass-hash"), { householdId: "operational-family", status: "ACTIVE" });
+    await setDoc(doc(db, "ministries", ministryId, "serviceSessions", "session"), { localServiceDate: "2026-07-16", scheduleId: "schedule", scheduleName: "Sunday Service", status: "OPEN" });
   });
 });
 
@@ -42,9 +48,42 @@ describe("Firestore ministry boundaries", () => {
     await assertFails(getDoc(doc(db, "ministries", ministryId, "households", "family")));
   });
 
-  it("keeps Kids Church Volunteer child access closed until its operational rules exist", async () => {
+  it("allows a Kids Church Volunteer to read operational family records but not pass secrets", async () => {
     const db = env.authenticatedContext("kids", { email: "kids@example.org", email_verified: true }).firestore();
-    await assertFails(getDoc(doc(db, "ministries", ministryId, "children", "child")));
+    await assertSucceeds(getDoc(doc(db, "ministries", ministryId, "children", "operational-child")));
+    await assertSucceeds(getDoc(doc(db, "ministries", ministryId, "guardians", "guardian")));
+    await assertSucceeds(getDoc(doc(db, "ministries", ministryId, "familyPasses", "pass-hash")));
+    await assertFails(getDoc(doc(db, "ministries", ministryId, "familyPassSecrets", "operational-family")));
+  });
+
+  it("allows duplicate-safe volunteer check-in and constrained checkout", async () => {
+    const db = env.authenticatedContext("kids", { email: "kids@example.org", email_verified: true }).firestore();
+    const attendanceRef = doc(db, "ministries", ministryId, "attendance", "session_operational-child");
+    await assertSucceeds(setDoc(attendanceRef, {
+      childId: "operational-child", childNameSnapshot: "Operational Child", householdId: "operational-family", householdNameSnapshot: "Operational Family",
+      sessionId: "session", scheduleId: "schedule", scheduleNameSnapshot: "Sunday Service", localServiceDate: "2026-07-16",
+      groupId: "group", groupNameSnapshot: "Kids", roomId: "room", roomNameSnapshot: "Room 1", status: "CHECKED_IN",
+      checkInAt: serverTimestamp(), checkInBy: "kids", checkInMethod: "QR"
+    }));
+    await assertFails(updateDoc(attendanceRef, {
+      status: "CHECKED_OUT", checkOutAt: serverTimestamp(), checkOutBy: "kids", checkOutMethod: "QR",
+      releasedToGuardianId: "other-guardian", releasedToName: "Other Guardian", checkoutNote: ""
+    }));
+    await assertSucceeds(updateDoc(attendanceRef, {
+      status: "CHECKED_OUT", checkOutAt: serverTimestamp(), checkOutBy: "kids", checkOutMethod: "QR",
+      releasedToGuardianId: "guardian", releasedToName: "Guardian", checkoutNote: ""
+    }));
+    await assertFails(updateDoc(attendanceRef, { status: "CHECKED_IN" }));
+  });
+
+  it("denies an Admin Volunteer from writing attendance", async () => {
+    const db = env.authenticatedContext("admin", { email: "admin@example.org", email_verified: true }).firestore();
+    await assertFails(setDoc(doc(db, "ministries", ministryId, "attendance", "session_operational-child"), {
+      childId: "operational-child", childNameSnapshot: "Operational Child", householdId: "operational-family", householdNameSnapshot: "Operational Family",
+      sessionId: "session", scheduleId: "schedule", scheduleNameSnapshot: "Sunday Service", localServiceDate: "2026-07-16",
+      groupId: "group", groupNameSnapshot: "Kids", roomId: "room", roomNameSnapshot: "Room 1", status: "CHECKED_IN",
+      checkInAt: serverTimestamp(), checkInBy: "admin", checkInMethod: "QR"
+    }));
   });
 
   it("allows an Admin Volunteer to create an active family but not deactivate it", async () => {

@@ -10,6 +10,9 @@
         ],
         "admin": [
           "kidschurchlog-register"
+        ],
+        "volunteer": [
+          "kidschurchlog-volunteer"
         ]
       }
     }
