@@ -221,7 +221,7 @@ KidsChurchLog MVP uses three roles:
 |---|---|
 | Ministry Lead | In-depth monitoring, ministry configuration, reports, attendance corrections, pass lifecycle, and delegation of user roles |
 | Admin Volunteer | Family registration and maintenance: households, guardians, children, safety information, and Family Pass issue/reissue |
-| Kids Church Volunteer | Sunday operations: service participation, check-in, check-out, and assigned-room attendance |
+| Kids Church Volunteer | Sunday operations: service participation, live room planning, check-in, check-out, and current attendance |
 
 Roles are composable. A person may be both an Admin Volunteer and a Kids Church Volunteer. A Ministry Lead may also receive either volunteer role when they personally serve in that workflow; Ministry Lead does not silently imply operational access to the other applications.
 
@@ -245,9 +245,9 @@ Ministry Lead is broad because someone must monitor the system and delegate role
 - Optional application-enforced MFA uses TOTP after enabling Firebase Authentication with Identity Platform. SMS MFA is excluded because it requires billed SMS service and conflicts with the Spark-only boundary.
 - Firebase project custody remains separate from the application role and is reserved for emergency technical recovery.
 
-### 6.5 Session assignment labels
+### 6.5 Session participation and optional labels
 
-Assignment labels are operational descriptions rather than authorization roles. Examples include Lead, Assistant, Check-in, and Runner. Ministry Lead configures available labels. A Kids Church Volunteer’s room visibility is determined by active session assignments.
+An active Kids Church Volunteer role is sufficient to join any open service and perform Sunday operations; Ministry Lead approval is not repeated per service, room, or station. Optional labels such as Lead, Assistant, Check-in, and Runner may describe responsibilities but never gate application access or room visibility. Teams may coordinate labels informally or configure them later without making them part of the MVP authorization model.
 
 ### 6.6 Access lifecycle
 
@@ -310,10 +310,10 @@ A planned outgoing Ministry Lead transfers responsibilities and confirms at leas
 | Family Pass issue/reprint | Monitor | Allowed after family verification | None | None |
 | Lost/damaged pass replacement | Monitor/manage exceptions | Allowed with verification, reason, and audit | None | None |
 | Administrative pass disable | Manage with reason | Escalate to Ministry Lead | None | None |
-| Service-session configuration | Manage | None | Join/open as permitted | None |
-| Room assignments | Manage | None | Assigned read | None |
-| Check-in and check-out | Monitor/correct | None unless also Kids Church Volunteer | Active session and assignment | None |
-| Current room attendance | Monitor | None | Assigned room | None |
+| Service-session configuration | Open scheduled/on-demand, close/correct | None | Join or open scheduled/on-demand | None |
+| Room assignments | Monitor/correct | None | Create and adjust for active session | None |
+| Check-in and check-out | Monitor/correct | None unless also Kids Church Volunteer | Any open session | None |
+| Current room attendance | Monitor | None | Current open session | None |
 | Historical attendance and reports | Manage | None | Current session summary only | None |
 | CSV export | Allowed with reason | None | None | None |
 | Audit activity | Read | None | None | None |
@@ -541,9 +541,9 @@ Mobile Ministry Lead uses a compact header and explicit menu rather than copying
 
 **Access:** Ministry Lead.
 
-**Content:** Date, schedule, status, opening volunteer, group-to-room assignments, room capacities, volunteer assignments, attendance counts.
+**Content:** Date, scheduled/on-demand kind, status, opening volunteer, current group-to-room mapping, room capacities, and attendance counts.
 
-**Actions:** Create/open, assign rooms, assign volunteers, close, reopen with confirmation, view attendance.
+**Actions:** Create/open scheduled or on-demand sessions, monitor/correct room mappings, close, reopen with confirmation, view attendance. Ordinary on-site room setup and adjustment belongs to Kids Church Volunteers.
 
 **Constraints:** One open session per schedule/date unless a Ministry Lead deliberately creates a labeled exception. A room may host multiple groups only with explicit confirmation.
 
@@ -730,15 +730,15 @@ During scanning, confirmation, success, and checkout, navigation is minimized to
 
 **Purpose:** Choose or join today’s service.
 
-**Content:** Suggested service based on ministry timezone, active sessions, upcoming schedules, volunteer assignments.
+**Content:** Suggested service based on ministry timezone, active sessions, and recurring schedules.
 
 **Behavior:** Time suggestion is never automatic confirmation. Joining an existing session is preferred over opening a duplicate.
 
-**Empty state:** No scheduled service today; permitted users may choose another active schedule or contact a Ministry Lead.
+**Empty state:** No service is open; an active Ministry Lead or Kids Church Volunteer may open a recurring schedule or an on-demand gathering.
 
 ### 11.5 V-04: Open service confirmation
 
-**Content:** Date, schedule, volunteer name, station, assigned room/group, room mappings configured by Ministry Lead.
+**Content:** Date, recurring schedule or on-demand name, volunteer name, and optional station label. Room setup follows after the session opens and is controlled by the on-site Kids Church team.
 
 **Action:** Confirm and open session, or join if a concurrent session appeared.
 
@@ -778,7 +778,7 @@ During scanning, confirmation, success, and checkout, navigation is minimized to
 
 **Interaction:** Select active children attending. Already checked-in children cannot be selected again. Inactive children appear only when needed with an explanatory status.
 
-**Room suggestion:** Derived from current session group-room assignments. Missing assignments block confirmation for that child and direct the volunteer to a Ministry Lead.
+**Room suggestion:** Derived from the current session group-room mapping. Missing mappings block check-in and direct the volunteer to Rooms, where any active Kids Church Volunteer can complete the on-site setup.
 
 **Safety:** Allergies and medical alerts are prominent; detailed notes are expandable to reduce visual overload.
 
@@ -822,23 +822,25 @@ During scanning, confirmation, success, and checkout, navigation is minimized to
 
 **Purpose:** View children in the current service.
 
-**Filters:** Assigned room, group, status, search.
+**Filters:** Room, group, status, search.
 
-**Default scope:** Kids Church Volunteer’s assigned rooms. Ministry Lead monitors all rooms through its application.
+**Default scope:** All rooms in the current open service. Per-session volunteer assignment is not required.
 
 **Actions:** Open child operational summary, start authorized check-out.
 
 ### 11.16 V-15: Room dashboard
 
-**Content:** Assigned rooms, current count, configured capacity, group assignments, assigned volunteers, children list.
+**Content:** Current group-room mapping, room count, configured capacity, and checked-in children. Kids Church Volunteers may create or adjust the mapping when on-site conditions change.
 
 **Capacity:** Warning at configurable threshold; capacity is advisory in MVP and does not silently reroute children.
+
+**Room changes:** Require an operational reason and revision check. New check-ins use the latest mapping. If checked-in children are physically moving, the volunteer explicitly confirms updating their live attendance room; the system records actor, time, and reason. A stale station cannot check a child into an outdated room.
 
 **Empty state:** “No children checked into this room yet.”
 
 ### 11.17 V-16: More/account
 
-**Content:** Authenticated identity, roles, current assignments, station setting, camera help, PWA install help, sign-out, application version.
+**Content:** Authenticated identity, roles, current service, station setting, camera help, PWA install help, sign-out, application version.
 
 **No administrative settings belong here.**
 
@@ -980,7 +982,7 @@ Fields: name, weekday, local start/end time, check-in opening offset, display or
 
 #### `ministries/{ministryId}/serviceSessions/{sessionId}`
 
-Fields: local service date, schedule ID and name/time snapshots, status, opened at/by, closed at/by, station metadata, revision.
+Fields: local service date, schedule ID and name/time snapshots, scheduled/on-demand kind, status, opened at/by, closed at/by, optional station metadata, room-mapping update metadata, revision.
 
 Status values: Draft, Open, Closed, Cancelled.
 
@@ -990,15 +992,17 @@ Fields: group ID/name snapshot, room ID/name snapshot, capacity snapshot, active
 
 Group and room pairing is session-specific.
 
+Room-assignment document IDs are deterministic from the group ID. Active Kids Church Volunteers may create and revise mappings only while the session is Open. Each mapping change increments the parent session revision and writes an audit event.
+
 #### `ministries/{ministryId}/serviceSessions/{sessionId}/volunteerAssignments/{assignmentId}`
 
-Fields: member UID, display name snapshot, room ID, group ID where applicable, assignment role label, active state.
+Optional post-MVP coordination records: member UID, display name snapshot, room ID, group ID where applicable, assignment role label, active state. Their presence never grants access and their absence never prevents an active Kids Church Volunteer from serving.
 
 #### `ministries/{ministryId}/attendance/{attendanceId}`
 
 Document ID is deterministic from session ID and child ID.
 
-Fields: child ID/name snapshot, household ID/name snapshot, session ID, schedule snapshot, group ID/name snapshot, room ID/name snapshot, status, check-in time/by/method, check-out time/by/method, released-to guardian ID/name or pass-presented indicator, checkout note, correction metadata.
+Fields: child ID/name snapshot, household ID/name snapshot, session ID, schedule snapshot, group ID/name snapshot, current operational room ID/name, status, check-in time/by/method, optional room-change actor/time/reason, check-out time/by/method, released-to guardian ID/name or pass-presented indicator, checkout note, correction metadata.
 
 Methods: QR, Manual, NFC reserved for future use.
 
@@ -1479,7 +1483,7 @@ The MVP is acceptable when:
 - Admin Volunteer is restricted to assisted family intake, record maintenance, and verified pass issue/reissue operations.
 - Kids Church Volunteer is restricted to approved service and room operations.
 - Families are church-maintained domain records, not authenticated users or roles.
-- Groups and rooms are configurable and session assignments are separate.
+- Groups and rooms are configurable; each open session has a volunteer-controlled live room mapping.
 - Attendance uses deterministic IDs and Firestore transactions.
 - Historical attendance stores operational snapshots.
 - The permanent Family Pass is opaque and contains no personal information.
@@ -1497,7 +1501,7 @@ These decisions do not block repository scaffolding but must be resolved before 
 
 - Exact ministry contact and escalation procedure for unauthorized pickup.
 - Required versus optional household address and emergency contact fields.
-- Who may open, close, or reopen a service session.
+- Exact close/reopen escalation policy; active Ministry Leads and Kids Church Volunteers may open sessions, while reopen remains a Ministry Lead correction.
 - Room capacity warning thresholds and escalation behavior.
 - Data retention periods and privacy-request process.
 - Exact volunteer membership term and Ministry Lead review interval within the approved limits.
@@ -1505,7 +1509,6 @@ These decisions do not block repository scaffolding but must be resolved before 
 - Required identity/relationship verification for family-record changes and lost-pass replacement.
 - Final Family Key visual length and grouping, subject to the minimum entropy requirement.
 - Ministry policy for children without birthdates or without an age-appropriate group.
-- Whether a volunteer may view unassigned rooms during an emergency.
 - Final production domains for each application.
 
 Until resolved, implementations must keep these choices configurable or isolated rather than embedding assumptions throughout the codebase.

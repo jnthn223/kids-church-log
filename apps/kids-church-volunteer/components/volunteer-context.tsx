@@ -27,6 +27,7 @@ type VolunteerContextValue = {
   online: boolean;
   selecting: boolean;
   selectSession(session: ServiceSession): Promise<void>;
+  refreshSession(): Promise<void>;
   leaveSession(): void;
 };
 
@@ -57,6 +58,16 @@ export function VolunteerOperationsProvider({ children }: { children: ReactNode 
     setAttendance([]);
   }, []);
 
+  const refreshSession = useCallback(async () => {
+    if (!sessionContext) return;
+    const current = source.data.find((item) => item.id === sessionContext.session.id);
+    if (!current || current.status !== "OPEN") {
+      leaveSession();
+      return;
+    }
+    setSessionContext(await loadSessionContext(current));
+  }, [sessionContext, source.data, leaveSession]);
+
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
     update();
@@ -80,6 +91,17 @@ export function VolunteerOperationsProvider({ children }: { children: ReactNode 
 
   useEffect(() => {
     if (!sessionContext) return;
+    const current = source.data.find((item) => item.id === sessionContext.session.id);
+    if (
+      current &&
+      (current.revision || 0) !== (sessionContext.session.revision || 0)
+    ) {
+      void loadSessionContext(current).then(setSessionContext);
+    }
+  }, [source.data, sessionContext]);
+
+  useEffect(() => {
+    if (!sessionContext) return;
     return subscribeToSessionAttendance(
       sessionContext.session.id,
       (records) => {
@@ -99,8 +121,9 @@ export function VolunteerOperationsProvider({ children }: { children: ReactNode 
     online,
     selecting,
     selectSession,
+    refreshSession,
     leaveSession
-  }), [source.data, source.loading, sessionContext, attendance, attendanceError, online, selecting, selectSession, leaveSession]);
+  }), [source.data, source.loading, sessionContext, attendance, attendanceError, online, selecting, selectSession, refreshSession, leaveSession]);
 
   return <VolunteerContext.Provider value={value}>{children}</VolunteerContext.Provider>;
 }

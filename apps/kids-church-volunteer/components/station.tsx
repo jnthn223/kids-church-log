@@ -1,18 +1,21 @@
 "use client";
 import { useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { AlertTriangle, Check, ChevronRight, KeyRound, QrCode, Search, ShieldCheck, Users } from "lucide-react";
 import { Button, Card, StatusChip } from "@kcl/ui";
 import {
   checkInChildren,
   checkOutChildren,
   getOperationalFamilyByHousehold,
+  openServiceSession,
   resolveOperationalFamily,
   searchOperationalFamilies,
   useAuthAccess,
+  useMinistryCollection,
   type CheckMethod,
   type OperationalFamily
 } from "@kcl/firebase";
-import type { Attendance, Household, ServiceSession } from "@kcl/types";
+import type { Attendance, Household, ServiceSchedule, ServiceSession } from "@kcl/types";
 import { QrScanner } from "./qr-scanner";
 import { useVolunteerOperations } from "./volunteer-context";
 
@@ -154,12 +157,58 @@ export function Station() {
   }
 
   const currentCount = operations.attendance.filter((record) => record.status === "CHECKED_IN").length;
-  return <><section className="ready-hero"><div className="service-line"><StatusChip tone="success">Open</StatusChip><span>{context.session.scheduleName} · {context.session.localServiceDate}</span></div><h1>{mode === "CHECK_IN" ? "Ready to check in" : "Ready to check out"}</h1><p>{mode === "CHECK_IN" ? "Scan the family pass, then confirm the children attending." : "Scan the same pass, then verify the authorized guardian before release."}</p><div className="mode-switch"><button className={mode === "CHECK_IN" ? "active" : ""} onClick={() => reset("CHECK_IN")}>Check-in</button><button className={mode === "CHECK_OUT" ? "active" : ""} onClick={() => reset("CHECK_OUT")}>Check-out</button></div></section>{!operations.online && <div className="offline-banner"><AlertTriangle /><span><strong>Connection required</strong> Attendance actions are disabled until this station reconnects.</span></div>}{error && <div className="form-error" role="alert">{error}</div>}<div className="station-grid"><Card className="scan-card"><div className="scan-icon"><QrCode size={44} /></div><h2>Scan Family QR</h2><p>Camera access starts only when you tap below.</p><Button disabled={!operations.online || busy} onClick={() => setScannerOpen(true)}><QrCode /> Start scanner</Button><div className="key-entry"><span>or enter the Family Key</span><form onSubmit={(event) => { event.preventDefault(); void resolveKey(key, "MANUAL"); }}><input aria-label="Family Key" placeholder="KCL-XXXXX-XXXXX-XXXX" value={key} onChange={(event) => setKey(event.target.value)} /><Button variant="secondary" disabled={!key.trim() || busy}><KeyRound size={18} /> Find</Button></form></div></Card><Card className="manual-card"><div className="card-title"><Search /><div><h2>Manual family search</h2><p>Use a full household, guardian, or child name.</p></div></div><form className="search-form" onSubmit={(event) => void search(event)}><input placeholder="e.g. Santos Family" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} /><Button variant="secondary" disabled={searching || !operations.online}>{searching ? "Searching…" : "Search"}</Button></form>{searchResults.length > 0 && <div className="search-results">{searchResults.map((household) => <button key={household.id} onClick={() => void chooseSearchResult(household.id)}><span><strong>{household.householdName}</strong><small>{household.childIds?.length || 0} registered children</small></span><ChevronRight /></button>)}</div>}</Card></div><div className="station-summary"><span><Users size={20} /><strong>{currentCount}</strong> children currently checked in</span><button onClick={operations.leaveSession}>Change service</button></div>{scannerOpen && <QrScanner onRead={(value) => void resolveKey(value, "QR")} onClose={() => setScannerOpen(false)} />}</>;
+  return <><section className="ready-hero"><div className="service-line"><StatusChip tone="success">Open</StatusChip><span>{context.session.scheduleName} · {context.session.localServiceDate}</span></div><h1>{mode === "CHECK_IN" ? "Ready to check in" : "Ready to check out"}</h1><p>{mode === "CHECK_IN" ? "Scan the family pass, then confirm the children attending." : "Scan the same pass, then verify the authorized guardian before release."}</p><div className="mode-switch"><button className={mode === "CHECK_IN" ? "active" : ""} onClick={() => reset("CHECK_IN")}>Check-in</button><button className={mode === "CHECK_OUT" ? "active" : ""} onClick={() => reset("CHECK_OUT")}>Check-out</button></div></section>{!context.roomAssignments.length && <div className="setup-banner"><AlertTriangle /><span><strong>Room setup required</strong> A Sunday team volunteer must map every active group before check-in.</span><Link className="button button-primary" href="/rooms/">Set up rooms</Link></div>}{!operations.online && <div className="offline-banner"><AlertTriangle /><span><strong>Connection required</strong> Attendance actions are disabled until this station reconnects.</span></div>}{error && <div className="form-error" role="alert">{error}</div>}<div className="station-grid"><Card className="scan-card"><div className="scan-icon"><QrCode size={44} /></div><h2>Scan Family QR</h2><p>Camera access starts only when you tap below.</p><Button disabled={!operations.online || busy || !context.roomAssignments.length} onClick={() => setScannerOpen(true)}><QrCode /> Start scanner</Button><div className="key-entry"><span>or enter the Family Key</span><form onSubmit={(event) => { event.preventDefault(); void resolveKey(key, "MANUAL"); }}><input aria-label="Family Key" placeholder="KCL-XXXXX-XXXXX-XXXX" value={key} onChange={(event) => setKey(event.target.value)} /><Button variant="secondary" disabled={!key.trim() || busy || !context.roomAssignments.length}><KeyRound size={18} /> Find</Button></form></div></Card><Card className="manual-card"><div className="card-title"><Search /><div><h2>Manual family search</h2><p>Use a full household, guardian, or child name.</p></div></div><form className="search-form" onSubmit={(event) => void search(event)}><input placeholder="e.g. Santos Family" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} /><Button variant="secondary" disabled={searching || !operations.online || !context.roomAssignments.length}>{searching ? "Searching…" : "Search"}</Button></form>{searchResults.length > 0 && <div className="search-results">{searchResults.map((household) => <button key={household.id} onClick={() => void chooseSearchResult(household.id)}><span><strong>{household.householdName}</strong><small>{household.childIds?.length || 0} registered children</small></span><ChevronRight /></button>)}</div>}</Card></div><div className="station-summary"><span><Users size={20} /><strong>{currentCount}</strong> children currently checked in</span><button onClick={operations.leaveSession}>Change service</button></div>{scannerOpen && <QrScanner onRead={(value) => void resolveKey(value, "QR")} onClose={() => setScannerOpen(false)} />}</>;
 }
 
 function ServiceSelector({ sessions, loading, selecting, select }: { sessions: ServiceSession[]; loading: boolean; selecting: boolean; select(session: ServiceSession): Promise<void> }) {
   const open = sessions.filter((session) => session.status === "OPEN").sort((a, b) => b.localServiceDate.localeCompare(a.localServiceDate));
-  return <div className="service-select"><p className="eyebrow">Sunday station</p><h1>Choose an open service</h1><p>Join the service prepared by your Ministry Lead. The date suggestion is never selected automatically.</p>{loading ? <div className="loading"><div className="spinner" />Loading services…</div> : open.length ? <div className="service-list">{open.map((session) => <Card key={session.id} className="service-card"><div><StatusChip tone="success">Open</StatusChip><h2>{session.scheduleName}</h2><p>{session.localServiceDate}{session.scheduleStartTime ? ` · ${session.scheduleStartTime}` : ""}</p></div><Button disabled={selecting} onClick={() => void select(session)}>Join service <ChevronRight /></Button></Card>)}</div> : <Card className="empty-card"><Users size={42} /><h2>No open service</h2><p>Ask a Ministry Lead to open today’s service and configure its room assignments.</p></Card>}</div>;
+  return <div className="service-select"><p className="eyebrow">Sunday station</p><h1>Choose or open a service</h1><p>Join an existing session whenever possible. Any active Kids Church Volunteer may open today’s scheduled service or an on-demand gathering—no per-service approval is required.</p>{loading ? <div className="loading"><div className="spinner" />Loading services…</div> : open.length ? <div className="service-list">{open.map((session) => <Card key={session.id} className="service-card"><div><StatusChip tone="success">Open</StatusChip><h2>{session.scheduleName}</h2><p>{session.localServiceDate}{session.scheduleStartTime ? ` · ${session.scheduleStartTime}` : ""} · {session.sessionKind === "ON_DEMAND" ? "On demand" : "Scheduled"}</p></div><Button disabled={selecting} onClick={() => void select(session)}>Join service <ChevronRight /></Button></Card>)}</div> : <Card className="empty-card"><Users size={42} /><h2>No open service</h2><p>Open a scheduled or on-demand service below when the team is ready.</p></Card>}<ServiceOpener selecting={selecting} select={select} /></div>;
+}
+
+function localDate() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function ServiceOpener({ selecting, select }: { selecting: boolean; select(session: ServiceSession): Promise<void> }) {
+  const { member } = useAuthAccess();
+  const schedules = useMinistryCollection<ServiceSchedule>("serviceSchedules");
+  const [kind, setKind] = useState<"SCHEDULED" | "ON_DEMAND">("SCHEDULED");
+  const [scheduleId, setScheduleId] = useState("");
+  const [date, setDate] = useState(localDate());
+  const [name, setName] = useState("");
+  const [time, setTime] = useState("");
+  const [stationName, setStationName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const activeSchedules = schedules.data.filter((schedule) => schedule.active).sort((a, b) => a.displayOrder - b.displayOrder);
+
+  async function open(event: FormEvent) {
+    event.preventDefault();
+    if (!member) return;
+    const schedule = activeSchedules.find((item) => item.id === scheduleId);
+    if (kind === "SCHEDULED" && !schedule) return setError("Choose a recurring service schedule.");
+    if (kind === "ON_DEMAND" && name.trim().length < 2) return setError("Enter a name for the on-demand service.");
+    setBusy(true); setError("");
+    try {
+      const result = await openServiceSession(member, {
+        localServiceDate: date,
+        scheduleId: kind === "SCHEDULED" ? schedule!.id : `on-demand-${name}-${time || "now"}`,
+        scheduleName: kind === "SCHEDULED" ? schedule!.name : name.trim(),
+        scheduleStartTime: kind === "SCHEDULED" ? schedule!.startTime : time,
+        sessionKind: kind,
+        stationName
+      }, "KIDS_CHURCH_VOLUNTEER");
+      await select(result.session);
+    } catch (value) {
+      setError(value instanceof Error && value.message === "SERVICE_SESSION_ALREADY_FINISHED"
+        ? "A finished session already exists for that service and date. Ask a Ministry Lead before reopening it."
+        : "The service could not be opened. Refresh and try again.");
+    } finally { setBusy(false); }
+  }
+
+  return <Card className="service-opener"><div className="service-opener-head"><div><p className="eyebrow">Open a new session</p><h2>Start service operations</h2></div><StatusChip tone="info">No assignment required</StatusChip></div>{error && <div className="form-error">{error}</div>}<div className="mode-switch"><button className={kind === "SCHEDULED" ? "active" : ""} onClick={() => setKind("SCHEDULED")}>Scheduled</button><button className={kind === "ON_DEMAND" ? "active" : ""} onClick={() => setKind("ON_DEMAND")}>On demand</button></div><form onSubmit={(event) => void open(event)}>{kind === "SCHEDULED" ? <div className="field"><label htmlFor="service-schedule">Recurring schedule</label><select id="service-schedule" required value={scheduleId} onChange={(event) => setScheduleId(event.target.value)}><option value="">Choose schedule</option>{activeSchedules.map((schedule) => <option key={schedule.id} value={schedule.id}>{schedule.name} · {schedule.startTime}</option>)}</select></div> : <div className="split-fields"><div className="field"><label htmlFor="service-name">Service name</label><input id="service-name" required minLength={2} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Vacation Bible School" /></div><div className="field"><label htmlFor="service-time">Start time <span>(optional)</span></label><input id="service-time" type="time" value={time} onChange={(event) => setTime(event.target.value)} /></div></div>}<div className="split-fields"><div className="field"><label htmlFor="service-date">Service date</label><input id="service-date" type="date" required value={date} onChange={(event) => setDate(event.target.value)} /></div><div className="field"><label htmlFor="station-name">Station name <span>(optional)</span></label><input id="station-name" value={stationName} onChange={(event) => setStationName(event.target.value)} placeholder="e.g. Main entrance" /></div></div><Button disabled={busy || selecting || schedules.loading}>{busy ? "Opening service…" : "Open and join service"}</Button></form></Card>;
 }
 
 type FamilyConfirmationProps = {

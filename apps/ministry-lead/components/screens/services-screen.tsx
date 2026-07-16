@@ -11,6 +11,7 @@ import {
 } from "@kcl/firebase";
 import type { ServiceSchedule, ServiceSession } from "@kcl/types";
 import { DataTable, Metric, ScreenError, ScreenLoading } from "./shared";
+import { ServiceSessionOpener } from "./service-session-opener";
 
 const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -158,6 +159,8 @@ export function ServicesScreen() {
           foot="Need room assignments"
         />
       </div>
+
+      <ServiceSessionOpener />
 
       <Card className="section">
         <div className="section-head">

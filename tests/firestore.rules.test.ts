@@ -28,7 +28,11 @@ beforeEach(async () => {
     await setDoc(doc(db, "ministries", ministryId, "guardians", "guardian"), { householdId: "operational-family", fullName: "Guardian", active: true });
     await setDoc(doc(db, "ministries", ministryId, "guardians", "other-guardian"), { householdId: "operational-family", fullName: "Other Guardian", active: true });
     await setDoc(doc(db, "ministries", ministryId, "familyPasses", "pass-hash"), { householdId: "operational-family", status: "ACTIVE" });
-    await setDoc(doc(db, "ministries", ministryId, "serviceSessions", "session"), { localServiceDate: "2026-07-16", scheduleId: "schedule", scheduleName: "Sunday Service", status: "OPEN" });
+    await setDoc(doc(db, "ministries", ministryId, "serviceSessions", "session"), { localServiceDate: "2026-07-16", scheduleId: "schedule", scheduleName: "Sunday Service", status: "OPEN", revision: 0 });
+    await setDoc(doc(db, "ministries", ministryId, "ministryGroups", "group"), { name: "Kids", active: true });
+    await setDoc(doc(db, "ministries", ministryId, "rooms", "room"), { name: "Room 1", active: true });
+    await setDoc(doc(db, "ministries", ministryId, "rooms", "room-2"), { name: "Room 2", active: true });
+    await setDoc(doc(db, "ministries", ministryId, "serviceSessions", "session", "roomAssignments", "group"), { groupId: "group", groupName: "Kids", roomId: "room", roomName: "Room 1", active: true, updatedBy: "lead" });
   });
 });
 
@@ -83,6 +87,49 @@ describe("Firestore ministry boundaries", () => {
       sessionId: "session", scheduleId: "schedule", scheduleNameSnapshot: "Sunday Service", localServiceDate: "2026-07-16",
       groupId: "group", groupNameSnapshot: "Kids", roomId: "room", roomNameSnapshot: "Room 1", status: "CHECKED_IN",
       checkInAt: serverTimestamp(), checkInBy: "admin", checkInMethod: "QR"
+    }));
+  });
+
+  it("lets a Kids Church Volunteer open a service without per-session assignment", async () => {
+    const db = env.authenticatedContext("kids", { email: "kids@example.org", email_verified: true }).firestore();
+    await assertSucceeds(setDoc(doc(db, "ministries", ministryId, "serviceSessions", "2026-07-17_sunday"), {
+      localServiceDate: "2026-07-17", scheduleId: "sunday", scheduleName: "Sunday Service", scheduleStartTime: "09:00",
+      sessionKind: "SCHEDULED", status: "OPEN", openedAt: serverTimestamp(), openedBy: "kids", stationName: "Main entrance",
+      revision: 0, createdAt: serverTimestamp(), createdBy: "kids", updatedAt: serverTimestamp(), updatedBy: "kids"
+    }));
+  });
+
+  it("lets a Kids Church Volunteer revise live room mappings but not session details", async () => {
+    const db = env.authenticatedContext("kids", { email: "kids@example.org", email_verified: true }).firestore();
+    const batch = writeBatch(db);
+    batch.set(doc(db, "ministries", ministryId, "serviceSessions", "session", "roomAssignments", "group"), {
+      groupId: "group", groupName: "Kids", roomId: "room", roomName: "Room 1", capacity: 20,
+      active: true, updatedAt: serverTimestamp(), updatedBy: "kids"
+    });
+    batch.update(doc(db, "ministries", ministryId, "serviceSessions", "session"), {
+      revision: 1, roomMappingUpdatedAt: serverTimestamp(), roomMappingUpdatedBy: "kids", updatedAt: serverTimestamp(), updatedBy: "kids"
+    });
+    await assertSucceeds(batch.commit());
+    await assertFails(updateDoc(doc(db, "ministries", ministryId, "serviceSessions", "session"), { scheduleName: "Changed by volunteer" }));
+  });
+
+  it("lets a Kids Church Volunteer move checked-in children after an audited room change", async () => {
+    await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "ministries", ministryId, "attendance", "session_room-move-child"), {
+      childId: "room-move-child", childNameSnapshot: "Room Move Child", householdId: "operational-family", householdNameSnapshot: "Operational Family",
+      sessionId: "session", groupId: "group", groupNameSnapshot: "Kids", roomId: "room", roomNameSnapshot: "Room 1", status: "CHECKED_IN"
+    }));
+    const db = env.authenticatedContext("kids", { email: "kids@example.org", email_verified: true }).firestore();
+    const mappingBatch = writeBatch(db);
+    mappingBatch.set(doc(db, "ministries", ministryId, "serviceSessions", "session", "roomAssignments", "group"), {
+      groupId: "group", groupName: "Kids", roomId: "room-2", roomName: "Room 2", capacity: 20,
+      active: true, updatedAt: serverTimestamp(), updatedBy: "kids"
+    });
+    mappingBatch.update(doc(db, "ministries", ministryId, "serviceSessions", "session"), {
+      revision: 1, roomMappingUpdatedAt: serverTimestamp(), roomMappingUpdatedBy: "kids", updatedAt: serverTimestamp(), updatedBy: "kids"
+    });
+    await assertSucceeds(mappingBatch.commit());
+    await assertSucceeds(updateDoc(doc(db, "ministries", ministryId, "attendance", "session_room-move-child"), {
+      roomId: "room-2", roomNameSnapshot: "Room 2", roomChangedAt: serverTimestamp(), roomChangedBy: "kids", roomChangeReason: "Room 1 air conditioning unavailable"
     }));
   });
 
