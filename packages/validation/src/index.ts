@@ -17,11 +17,14 @@ export const childRegistrationSchema = z.object({
   ministryGroupId: z.string().min(1, "Choose a ministry group"), allergies: z.string().trim().max(1000),
   medicalNotes: z.string().trim().max(2000), assistanceNotes: z.string().trim().max(2000)
 });
+const registeredChildSchema = childRegistrationSchema.extend({ authorizedGuardianIndexes: z.array(z.number().int().min(0)).min(1, "Choose at least one authorized pickup guardian") });
 export const familyRegistrationSchema = z.object({
-  householdName: safeText(2, 80), address: z.string().trim().max(300), preferredContactMethod: z.enum(["PHONE", "EMAIL", "IN_PERSON"]),
+  householdName: safeText(2, 80), address: z.string().trim().max(300), preferredContactMethod: z.enum(["PHONE", "EMAIL", "IN_PERSON"]), emergencyContactMode: z.enum(["PRIMARY_GUARDIAN", "ANOTHER_GUARDIAN", "OTHER"]), emergencyGuardianIndex: z.number().int().min(0).optional(),
   emergencyContactName: safeText(2, 100), emergencyContactPhone: safeText(7, 30),
-  guardians: z.array(guardianSchema).min(1), children: z.array(childRegistrationSchema).min(1), consentAcknowledged: z.literal(true)
-}).refine((value) => value.guardians.some((guardian) => guardian.authorizedPickup), { message: "At least one guardian must be authorized for pickup", path: ["guardians"] });
+  guardians: z.array(guardianSchema).min(1), children: z.array(registeredChildSchema).min(1), consentAcknowledged: z.literal(true)
+}).refine((value) => value.guardians.some((guardian) => guardian.authorizedPickup), { message: "At least one guardian must be authorized for pickup", path: ["guardians"] })
+  .refine((value) => value.emergencyContactMode !== "ANOTHER_GUARDIAN" || Boolean(value.guardians[value.emergencyGuardianIndex ?? -1]), { message: "Choose an emergency-contact guardian", path: ["emergencyGuardianIndex"] })
+  .refine((value) => value.children.every((child) => child.authorizedGuardianIndexes.every((index) => Boolean(value.guardians[index]?.authorizedPickup))), { message: "Each selected pickup guardian must be pickup-authorized", path: ["children"] });
 
 const predictablePasswordParts = ["123456", "password", "qwerty", "letmein", "welcome", "admin", "kidschurch"];
 

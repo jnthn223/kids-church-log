@@ -638,14 +638,12 @@ No Ministry Lead monitoring, team-access, service-configuration, historical atte
 
 **Steps:**
 
-1. Search for an existing family and confirm no duplicate.
-2. Household basics and preferred contact method.
-3. Primary and emergency contacts.
-4. Guardians and initial pickup authorization.
-5. Children, birthdates, groups, allergies, medical information, and assistance needs.
-6. Review the information with the guardian.
-7. Record consent acknowledgment according to ministry policy.
-8. Create the household and issue the initial Family Pass.
+1. Household basics and preferred contact method, with automatic possible-duplicate detection as information is entered.
+2. Guardians and initial pickup authorization.
+3. Children, birthdates, groups, allergies, medical information, assistance needs, and per-child authorized guardians.
+4. Emergency contact, defaulting to the primary guardian with optional selection of another guardian or a separate person.
+5. Review the information with the guardian.
+6. Record consent acknowledgment, create the household, and issue the initial Family Pass.
 
 **Accessibility:** The volunteer reads and explains fields when needed. No family email, smartphone, account, or self-service action is required.
 
@@ -663,15 +661,21 @@ No Ministry Lead monitoring, team-access, service-configuration, historical atte
 
 ### 10.7 AV-06: Guardian editor
 
-**Content:** Name, phone, email when available, relationship, linked children, initial pickup authorization, and emergency-contact status.
+**Content:** Name, phone, email when available, relationship, linked children, and initial pickup authorization. Emergency-contact selection belongs to the dedicated Emergency Contact step rather than this editor.
 
 **Validation:** An active family must retain at least one authorized pickup guardian. Exceptional revocation is escalated to Ministry Lead.
 
+**Per-child scope:** A pickup-eligible guardian defaults to all children in the household, but the volunteer may narrow authorization to specific children. The review step states each child’s authorized pickup guardians explicitly.
+
 ### 10.8 AV-07: Child editor
 
-**Content:** Identity, preferred name, birthdate, suggested configurable group, allergies, medical notes, assistance notes, and authorized guardians.
+**Content:** Identity, preferred name, birthdate, calculated age guidance, suggested configurable group, allergies, medical notes, assistance notes, and authorized guardians.
+
+**Data minimization:** Gender is not collected in MVP because no registration, room-assignment, safety, or reporting workflow uses it. Add it only when the ministry defines a concrete operational need and appropriate privacy handling.
 
 **Safety:** Alerts are reviewed verbally with the guardian before save. Changes create audit events without exposing them to unrelated volunteers.
+
+**Pickup authorization:** Every active child retains at least one explicitly selected authorized guardian. Household membership alone never grants pickup authorization for every child.
 
 ### 10.9 AV-08: Family Pass
 
@@ -804,9 +808,9 @@ During scanning, confirmation, success, and checkout, navigation is minimized to
 
 ### 11.13 V-12: Release confirmation
 
-**Interaction:** Select children being released, identify the presenting authorized guardian or select “Family Pass presented,” review alerts, optionally add a concise note, then confirm.
+**Interaction:** Select children being released, identify the presenting person, confirm that person is authorized for each selected child, review alerts, optionally add a concise note, then confirm. The Family Pass is a lookup credential and never substitutes for release authorization or identity verification.
 
-**Safety:** An unauthorized guardian cannot be selected. The volunteer must escalate rather than override. Corrections occur in Ministry Lead, not at the station.
+**Safety:** An unauthorized person cannot be selected through the ordinary flow. For an unexpected one-time delegate, the volunteer escalates to the designated lead, who calls a guardian using a phone number already stored in the family record, records session-limited authorization, and requires identity verification before release. If the guardian or delegate cannot be verified, the child is not released. Corrections occur in Ministry Lead, not at the station.
 
 ### 11.14 V-13: Check-out success
 
@@ -1091,7 +1095,7 @@ Index definitions are version-controlled. Product flows must not rely on ad hoc 
 - Address: optional by ministry policy, maximum 300 characters.
 - At least one active guardian is required.
 - Primary guardian must belong to the household.
-- Emergency contact name and phone are required unless ministry policy explicitly marks them optional.
+- A reachable guardian phone is required. The primary guardian is the default emergency contact; selecting a separate emergency contact is optional unless ministry policy explicitly requires one.
 
 ### 15.3 Guardian
 

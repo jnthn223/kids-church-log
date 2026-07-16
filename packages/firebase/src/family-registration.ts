@@ -6,9 +6,10 @@ const PASS_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
 export type FamilyRegistrationInput = {
   householdName: string; address: string; preferredContactMethod: "PHONE" | "EMAIL" | "IN_PERSON";
+  emergencyContactMode: "PRIMARY_GUARDIAN" | "ANOTHER_GUARDIAN" | "OTHER"; emergencyGuardianIndex?: number;
   emergencyContactName: string; emergencyContactPhone: string; consentAcknowledged: true;
   guardians: Array<{ fullName: string; phone: string; email?: string; relationship: string; authorizedPickup: boolean; emergencyContact: boolean }>;
-  children: Array<{ firstName: string; lastName: string; preferredName?: string; birthdate: string; ministryGroupId: string; allergies: string; medicalNotes: string; assistanceNotes: string }>;
+  children: Array<{ firstName: string; lastName: string; preferredName?: string; birthdate: string; ministryGroupId: string; allergies: string; medicalNotes: string; assistanceNotes: string; authorizedGuardianIndexes: number[] }>;
 };
 
 function randomPassToken() {
@@ -31,6 +32,11 @@ export async function registerFamily(actor: MinistryMember, input: FamilyRegistr
   const householdRef = doc(collection(db, "ministries", ministryId, "households"));
   const guardianRefs = input.guardians.map(() => doc(collection(db, "ministries", ministryId, "guardians")));
   const childRefs = input.children.map(() => doc(collection(db, "ministries", ministryId, "children")));
+  const emergencyGuardianIndex = input.emergencyContactMode === "PRIMARY_GUARDIAN"
+    ? 0
+    : input.emergencyContactMode === "ANOTHER_GUARDIAN"
+      ? input.emergencyGuardianIndex
+      : undefined;
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const token = randomPassToken();
@@ -51,13 +57,13 @@ export async function registerFamily(actor: MinistryMember, input: FamilyRegistr
           active: true, passStatus: "ACTIVE", consentAcknowledgedAt: serverTimestamp(), ...common
         });
         guardianRefs.forEach((ref, index) => transaction.set(ref, {
-          householdId: householdRef.id, ...input.guardians[index], normalizedName: normalize(input.guardians[index].fullName),
+          householdId: householdRef.id, ...input.guardians[index], authorizedPickup: input.children.some((child) => child.authorizedGuardianIndexes.includes(index)), emergencyContact: index === emergencyGuardianIndex, normalizedName: normalize(input.guardians[index].fullName),
           normalizedPhone: input.guardians[index].phone.replace(/\D/g, ""), normalizedEmail: normalize(input.guardians[index].email || ""),
           linkedChildIds: childRefs.map((childRef) => childRef.id), active: true, ...common
         }));
         childRefs.forEach((ref, index) => transaction.set(ref, {
           householdId: householdRef.id, ...input.children[index], normalizedSearchName: normalize(`${input.children[index].firstName} ${input.children[index].lastName} ${input.children[index].preferredName || ""}`),
-          authorizedGuardianIds: guardianRefs.filter((_, guardianIndex) => input.guardians[guardianIndex].authorizedPickup).map((guardianRef) => guardianRef.id), active: true, firstVisit: true, ...common
+          authorizedGuardianIds: input.children[index].authorizedGuardianIndexes.map((guardianIndex) => guardianRefs[guardianIndex].id), active: true, firstVisit: true, ...common
         }));
         transaction.set(passRef, { householdId: householdRef.id, status: "ACTIVE", issuedAt: serverTimestamp(), issuedBy: actor.userId });
         transaction.set(secretRef, { householdId: householdRef.id, currentOpaqueToken: token, formattedDisplayKey: token, tokenHash, status: "ACTIVE", issuedAt: serverTimestamp(), issuedBy: actor.userId, ...common });
@@ -115,14 +121,14 @@ export async function updateRegistrationDocument(actor: MinistryMember, path: "h
   });
 }
 
-export async function addGuardianToFamily(actor: MinistryMember, householdId: string, childIds: string[], guardian: { fullName: string; phone: string; email?: string; relationship: string; authorizedPickup: boolean; emergencyContact: boolean }) {
+export async function addGuardianToFamily(actor: MinistryMember, householdId: string, linkedChildIds: string[], authorizedChildIds: string[], guardian: { fullName: string; phone: string; email?: string; relationship: string; authorizedPickup: boolean; emergencyContact: boolean }) {
   const db = getFirebaseDb(); const householdRef = doc(db, "ministries", ministryId, "households", householdId); const guardianRef = doc(collection(db, "ministries", ministryId, "guardians"));
   await runTransaction(db, async (transaction) => {
     if (!(await transaction.get(householdRef)).exists()) throw new Error("This family is no longer available.");
     const common = { createdAt: serverTimestamp(), createdBy: actor.userId, updatedAt: serverTimestamp(), updatedBy: actor.userId };
-    transaction.set(guardianRef, { householdId, ...guardian, normalizedName: normalize(guardian.fullName), normalizedPhone: guardian.phone.replace(/\D/g, ""), normalizedEmail: normalize(guardian.email || ""), linkedChildIds: childIds, active: true, ...common });
+    transaction.set(guardianRef, { householdId, ...guardian, normalizedName: normalize(guardian.fullName), normalizedPhone: guardian.phone.replace(/\D/g, ""), normalizedEmail: normalize(guardian.email || ""), linkedChildIds, active: true, ...common });
     transaction.update(householdRef, { guardianIds: arrayUnion(guardianRef.id), updatedAt: serverTimestamp(), updatedBy: actor.userId });
-    if (guardian.authorizedPickup) childIds.forEach((childId) => transaction.update(doc(db, "ministries", ministryId, "children", childId), { authorizedGuardianIds: arrayUnion(guardianRef.id), updatedAt: serverTimestamp(), updatedBy: actor.userId }));
+    if (guardian.authorizedPickup) authorizedChildIds.forEach((childId) => transaction.update(doc(db, "ministries", ministryId, "children", childId), { authorizedGuardianIds: arrayUnion(guardianRef.id), updatedAt: serverTimestamp(), updatedBy: actor.userId }));
     transaction.set(doc(collection(db, "ministries", ministryId, "auditLogs")), { eventType: "GUARDIAN_ADDED", actorUid: actor.userId, actorName: actor.displayName, targetCollection: "guardians", targetId: guardianRef.id, timestamp: serverTimestamp(), reason: "Guardian added during verified family maintenance", applicationSource: "ADMIN_VOLUNTEER" });
   });
 }
@@ -134,7 +140,7 @@ export async function addChildToFamily(actor: MinistryMember, householdId: strin
     if (!(await transaction.get(householdRef)).exists()) throw new Error("This family is no longer available.");
     transaction.set(childRef, { householdId, ...child, normalizedSearchName: normalize(`${child.firstName} ${child.lastName} ${child.preferredName || ""}`), authorizedGuardianIds, active: true, firstVisit: true, createdAt: serverTimestamp(), createdBy: actor.userId, updatedAt: serverTimestamp(), updatedBy: actor.userId });
     transaction.update(householdRef, { childIds: arrayUnion(childRef.id), updatedAt: serverTimestamp(), updatedBy: actor.userId });
-    allGuardianIds.forEach((guardianId) => transaction.update(doc(db, "ministries", ministryId, "guardians", guardianId), { linkedChildIds: arrayUnion(childRef.id), updatedAt: serverTimestamp(), updatedBy: actor.userId }));
+    allGuardianIds.forEach((guardianId) => transaction.update(doc(db, "ministries", ministryId, "guardians", guardianId), { linkedChildIds: arrayUnion(childRef.id), ...(authorizedGuardianIds.includes(guardianId) ? { authorizedPickup: true } : {}), updatedAt: serverTimestamp(), updatedBy: actor.userId }));
     transaction.set(doc(collection(db, "ministries", ministryId, "auditLogs")), { eventType: "CHILD_ADDED", actorUid: actor.userId, actorName: actor.displayName, targetCollection: "children", targetId: childRef.id, timestamp: serverTimestamp(), reason: "Child added during verified family maintenance", applicationSource: "ADMIN_VOLUNTEER" });
   });
 }

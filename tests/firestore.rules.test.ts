@@ -61,6 +61,14 @@ describe("Firestore ministry boundaries", () => {
     await assertSucceeds(updateDoc(doc(db, "ministries", ministryId, "familyPasses", "hash"), { status: "REPLACED", replacedBy: "admin", replacementHash: "other" }));
   });
 
+  it("requires every Admin-created active child to retain an authorized pickup guardian", async () => {
+    const db = env.authenticatedContext("admin", { email: "admin@example.org", email_verified: true }).firestore();
+    const childRef = doc(db, "ministries", ministryId, "children", "new-child");
+    await assertFails(setDoc(childRef, { householdId: "family", firstName: "New", lastName: "Child", active: true, authorizedGuardianIds: [], createdBy: "admin", updatedBy: "admin" }));
+    await assertSucceeds(setDoc(childRef, { householdId: "family", firstName: "New", lastName: "Child", active: true, authorizedGuardianIds: ["guardian"], createdBy: "admin", updatedBy: "admin" }));
+    await assertFails(updateDoc(childRef, { authorizedGuardianIds: [], updatedBy: "admin" }));
+  });
+
   it("prevents a Ministry Lead from renewing themselves", async () => {
     const db = env.authenticatedContext("lead", { email: "lead@example.org", email_verified: true }).firestore();
     await assertFails(updateDoc(doc(db, "ministries", ministryId, "members", "lead"), { expiresAt: Timestamp.fromMillis(Date.now() + 60 * 86_400_000) }));

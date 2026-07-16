@@ -66,8 +66,8 @@ service cloud.firestore {
       }
       match /children/{id} {
         allow read: if lead(ministryId) || adminVolunteer(ministryId);
-        allow create: if (lead(ministryId) || adminVolunteer(ministryId)) && request.resource.data.active == true && request.resource.data.createdBy == request.auth.uid && request.resource.data.updatedBy == request.auth.uid;
-        allow update: if lead(ministryId) || (adminVolunteer(ministryId) && request.resource.data.active == resource.data.active && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.updatedBy == request.auth.uid);
+        allow create: if (lead(ministryId) || adminVolunteer(ministryId)) && request.resource.data.active == true && request.resource.data.authorizedGuardianIds is list && request.resource.data.authorizedGuardianIds.size() >= 1 && request.resource.data.createdBy == request.auth.uid && request.resource.data.updatedBy == request.auth.uid;
+        allow update: if lead(ministryId) || (adminVolunteer(ministryId) && request.resource.data.active == resource.data.active && request.resource.data.authorizedGuardianIds is list && request.resource.data.authorizedGuardianIds.size() >= 1 && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.updatedBy == request.auth.uid);
         allow delete: if false;
       }
       match /familyPassSecrets/{id} {

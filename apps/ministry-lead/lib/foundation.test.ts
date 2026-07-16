@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysFromNow, isExpired } from "@kcl/utils";
+import { calculateAge, daysFromNow, isExpired } from "@kcl/utils";
 import { groupSchema, passwordValidationError, scheduleSchema } from "@kcl/validation";
 
 describe("shared foundation", () => {
@@ -14,6 +14,12 @@ describe("shared foundation", () => {
 
   it("allows a ministry group without a short label", () => {
     expect(groupSchema.safeParse({ name: "Small Kids", displayOrder: 0, active: true }).success).toBe(true);
+  });
+
+  it("calculates age around the birthday boundary", () => {
+    expect(calculateAge("2020-07-16", new Date(2026, 6, 16))).toBe(6);
+    expect(calculateAge("2020-07-17", new Date(2026, 6, 16))).toBe(5);
+    expect(calculateAge("not-a-date", new Date(2026, 6, 16))).toBeNull();
   });
 
   it("rejects schedules that end before they start", () => {

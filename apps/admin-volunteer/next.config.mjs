@@ -19,7 +19,7 @@ const nextConfig = {
   reactStrictMode: true,
   trailingSlash: true,
   images: { unoptimized: true },
-  transpilePackages: ["@kcl/firebase", "@kcl/types", "@kcl/ui", "@kcl/validation"],
+  transpilePackages: ["@kcl/firebase", "@kcl/types", "@kcl/ui", "@kcl/utils", "@kcl/validation"],
   env: {
     NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,

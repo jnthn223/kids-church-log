@@ -17,6 +17,18 @@ export function isExpired(value: unknown) {
 }
 
 export function daysFromNow(days: number) { const date = new Date(); date.setDate(date.getDate() + days); return date; }
+export function calculateAge(birthdate: string, today = new Date()) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthdate);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const candidate = new Date(year, month - 1, day);
+  if (candidate.getFullYear() !== year || candidate.getMonth() !== month - 1 || candidate.getDate() !== day || candidate > today) return null;
+  let age = today.getFullYear() - year;
+  if (today.getMonth() + 1 < month || (today.getMonth() + 1 === month && today.getDate() < day)) age -= 1;
+  return age;
+}
 export function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
   if (!rows.length) return;
   const headers = Object.keys(rows[0]);
