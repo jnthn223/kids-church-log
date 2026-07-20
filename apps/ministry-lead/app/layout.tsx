@@ -5,11 +5,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Ministry Lead · KidsChurchLog",
+    default: "KidsChurchLog · Every child known",
     template: "%s · KidsChurchLog"
   },
-  description: "Safe children’s-ministry oversight and operations.",
-  applicationName: "KidsChurchLog Ministry Lead"
+  description: "Role-based family registration, Sunday attendance, safe checkout, and children’s-ministry oversight.",
+  applicationName: "KidsChurchLog"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

@@ -27,6 +27,7 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (state === "ACTIVE") router.replace("/overview/");
+    else if (state === "WRONG_ROLE") router.replace("/");
     else if (!["LOADING", "SIGNED_OUT"].includes(state)) router.replace("/access/");
   }, [state, router]);
 
