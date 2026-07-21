@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from "firebase/firestore";
 
 const projectId = "kidschurchlog-app";
 const ministryId = "kidschurch";
@@ -18,21 +18,24 @@ beforeEach(async () => {
     await setDoc(doc(db, "ministries", ministryId, "members", "lead"), { userId: "lead", displayName: "Lead", email: "lead@example.org", roles: ["MINISTRY_LEAD"], status: "ACTIVE", expiresAt: future });
     await setDoc(doc(db, "ministries", ministryId, "members", "expired"), { userId: "expired", displayName: "Expired", email: "expired@example.org", roles: ["MINISTRY_LEAD"], status: "ACTIVE", expiresAt: past });
     await setDoc(doc(db, "ministries", ministryId, "members", "kids"), { userId: "kids", displayName: "Kids Volunteer", email: "kids@example.org", roles: ["KIDS_CHURCH_VOLUNTEER"], status: "ACTIVE", expiresAt: future });
+    await setDoc(doc(db, "ministries", ministryId, "members", "kids-2"), { userId: "kids-2", displayName: "Second Volunteer", email: "kids2@example.org", roles: ["KIDS_CHURCH_VOLUNTEER"], status: "ACTIVE", expiresAt: future });
     await setDoc(doc(db, "ministries", ministryId, "members", "admin"), { userId: "admin", displayName: "Admin Volunteer", email: "admin@example.org", roles: ["ADMIN_VOLUNTEER"], status: "ACTIVE", expiresAt: future });
     await setDoc(doc(db, "ministries", ministryId, "members", "legacy-suspended"), { userId: "legacy-suspended", displayName: "Legacy Suspended Lead", email: "legacy@example.org", roles: [], status: "SUSPENDED", expiresAt: past });
     await setDoc(doc(db, "ministries", ministryId, "settings", "accessGovernance"), { assignedMinistryLeadIds: ["lead"], minimumActiveLeadTarget: 2, leadReviewIntervalDays: 150, accessReviewWarningDays: 30, updatedBy: "lead" });
     await setDoc(doc(db, "ministries", ministryId, "households", "family"), { householdName: "Family", active: true });
     await setDoc(doc(db, "ministries", ministryId, "children", "child"), { firstName: "Child", active: true });
     await setDoc(doc(db, "ministries", ministryId, "households", "operational-family"), { householdName: "Operational Family", active: true, childIds: ["operational-child"], guardianIds: ["guardian"] });
-    await setDoc(doc(db, "ministries", ministryId, "children", "operational-child"), { householdId: "operational-family", firstName: "Operational", lastName: "Child", active: true, authorizedGuardianIds: ["guardian"] });
+    await setDoc(doc(db, "ministries", ministryId, "children", "operational-child"), { firstName: "Operational", lastName: "Child", ministryGroupId: "group", active: true, authorizedGuardianIds: ["guardian"] });
     await setDoc(doc(db, "ministries", ministryId, "guardians", "guardian"), { householdId: "operational-family", fullName: "Guardian", active: true });
     await setDoc(doc(db, "ministries", ministryId, "guardians", "other-guardian"), { householdId: "operational-family", fullName: "Other Guardian", active: true });
     await setDoc(doc(db, "ministries", ministryId, "familyPasses", "pass-hash"), { householdId: "operational-family", status: "ACTIVE" });
     await setDoc(doc(db, "ministries", ministryId, "serviceSessions", "session"), { localServiceDate: "2026-07-16", scheduleId: "schedule", scheduleName: "Sunday Service", status: "OPEN", revision: 0 });
     await setDoc(doc(db, "ministries", ministryId, "ministryGroups", "group"), { name: "Kids", active: true });
+    await setDoc(doc(db, "ministries", ministryId, "ministryGroups", "sibling-group"), { name: "Older Kids", active: true });
     await setDoc(doc(db, "ministries", ministryId, "rooms", "room"), { name: "Room 1", active: true });
     await setDoc(doc(db, "ministries", ministryId, "rooms", "room-2"), { name: "Room 2", active: true });
     await setDoc(doc(db, "ministries", ministryId, "serviceSessions", "session", "roomAssignments", "group"), { groupId: "group", groupName: "Kids", roomId: "room", roomName: "Room 1", active: true, updatedBy: "lead" });
+    await setDoc(doc(db, "ministries", ministryId, "serviceSessions", "session", "roomAssignments", "sibling-group"), { groupId: "sibling-group", groupName: "Older Kids", roomId: "room-2", roomName: "Room 2", active: true, updatedBy: "lead" });
   });
 });
 
@@ -67,6 +70,7 @@ describe("Firestore ministry boundaries", () => {
       childId: "operational-child", childNameSnapshot: "Operational Child", householdId: "operational-family", householdNameSnapshot: "Operational Family",
       sessionId: "session", scheduleId: "schedule", scheduleNameSnapshot: "Sunday Service", localServiceDate: "2026-07-16",
       groupId: "group", groupNameSnapshot: "Kids", roomId: "room", roomNameSnapshot: "Room 1", status: "CHECKED_IN",
+      registeredGroupId: "group", placementOverridden: false, placementOverrideReason: "",
       checkInAt: serverTimestamp(), checkInBy: "kids", checkInMethod: "QR"
     }));
     await assertFails(updateDoc(attendanceRef, {
@@ -80,6 +84,28 @@ describe("Firestore ministry boundaries", () => {
     await assertFails(updateDoc(attendanceRef, { status: "CHECKED_IN" }));
   });
 
+  it("allows an audited sibling placement override but rejects forged placement details", async () => {
+    const db = env.authenticatedContext("kids", { email: "kids@example.org", email_verified: true }).firestore();
+    const validOverride = {
+      childId: "operational-child", childNameSnapshot: "Operational Child", householdId: "operational-family", householdNameSnapshot: "Operational Family",
+      sessionId: "session", scheduleId: "schedule", scheduleNameSnapshot: "Sunday Service", localServiceDate: "2026-07-16",
+      groupId: "sibling-group", groupNameSnapshot: "Older Kids", roomId: "room-2", roomNameSnapshot: "Room 2", status: "CHECKED_IN",
+      registeredGroupId: "group", placementOverridden: true, placementOverrideReason: "Staying with sibling",
+      checkInAt: serverTimestamp(), checkInBy: "kids", checkInMethod: "MANUAL"
+    };
+    await assertSucceeds(setDoc(doc(db, "ministries", ministryId, "attendance", "session_operational-child"), validOverride));
+    await env.withSecurityRulesDisabled(async (context) => deleteDoc(doc(context.firestore(), "ministries", ministryId, "attendance", "session_operational-child")));
+    await assertFails(setDoc(doc(db, "ministries", ministryId, "attendance", "session_operational-child"), {
+      ...validOverride, roomId: "room", roomNameSnapshot: "Room 1"
+    }));
+    await assertFails(setDoc(doc(db, "ministries", ministryId, "attendance", "session_operational-child"), {
+      ...validOverride, householdId: "family", householdNameSnapshot: "Family"
+    }));
+    await assertFails(setDoc(doc(db, "ministries", ministryId, "attendance", "session_operational-child"), {
+      ...validOverride, placementOverrideReason: ""
+    }));
+  });
+
   it("denies an Admin Volunteer from writing attendance", async () => {
     const db = env.authenticatedContext("admin", { email: "admin@example.org", email_verified: true }).firestore();
     await assertFails(setDoc(doc(db, "ministries", ministryId, "attendance", "session_operational-child"), {
@@ -90,12 +116,53 @@ describe("Firestore ministry boundaries", () => {
     }));
   });
 
-  it("lets a Kids Church Volunteer open a service without per-session assignment", async () => {
+  it("lets a Kids Church Volunteer atomically open a service with its group-room plan", async () => {
     const db = env.authenticatedContext("kids", { email: "kids@example.org", email_verified: true }).firestore();
-    await assertSucceeds(setDoc(doc(db, "ministries", ministryId, "serviceSessions", "2026-07-17_sunday"), {
+    const batch = writeBatch(db);
+    batch.set(doc(db, "ministries", ministryId, "serviceSessions", "2026-07-17_sunday"), {
       localServiceDate: "2026-07-17", scheduleId: "sunday", scheduleName: "Sunday Service", scheduleStartTime: "09:00",
       sessionKind: "SCHEDULED", status: "OPEN", openedAt: serverTimestamp(), openedBy: "kids", stationName: "Main entrance",
       revision: 0, createdAt: serverTimestamp(), createdBy: "kids", updatedAt: serverTimestamp(), updatedBy: "kids"
+    });
+    batch.set(doc(db, "ministries", ministryId, "serviceSessions", "2026-07-17_sunday", "roomAssignments", "group"), {
+      groupId: "group", groupName: "Kids", roomId: "room", roomName: "Room 1", capacity: 20,
+      active: true, updatedAt: serverTimestamp(), updatedBy: "kids"
+    });
+    batch.set(doc(db, "ministries", ministryId, "serviceSessions", "2026-07-17_sunday", "volunteerAssignments", "kids"), {
+      memberUid: "kids", displayName: "Kids Volunteer", assignmentRole: "Service opener",
+      groupId: "group", roomId: "room", servingAreaLabel: "Kids · Room 1",
+      active: true, joinedAt: serverTimestamp(), joinedBy: "kids"
+    });
+    await assertSucceeds(batch.commit());
+  });
+
+  it("lets volunteers record only their own participation in an open service", async () => {
+    const db = env.authenticatedContext("kids-2", { email: "kids2@example.org", email_verified: true }).firestore();
+    const ownAssignment = doc(db, "ministries", ministryId, "serviceSessions", "session", "volunteerAssignments", "kids-2");
+    await assertSucceeds(setDoc(ownAssignment, {
+      memberUid: "kids-2", displayName: "Second Volunteer", assignmentRole: "Session volunteer",
+      groupId: "group", roomId: "room", servingAreaLabel: "Kids · Room 1",
+      active: true, joinedAt: serverTimestamp(), joinedBy: "kids-2"
+    }));
+    await assertSucceeds(updateDoc(ownAssignment, {
+      groupId: "sibling-group", roomId: "room-2", servingAreaLabel: "Older Kids · Room 2",
+      assignmentUpdatedAt: serverTimestamp(), assignmentUpdatedBy: "kids-2"
+    }));
+    await assertFails(updateDoc(ownAssignment, { displayName: "Changed", assignmentUpdatedAt: serverTimestamp(), assignmentUpdatedBy: "kids-2" }));
+    await assertFails(setDoc(doc(db, "ministries", ministryId, "serviceSessions", "session", "volunteerAssignments", "someone-else"), {
+      memberUid: "someone-else", displayName: "Someone Else", assignmentRole: "Session volunteer",
+      groupId: "group", roomId: "room", servingAreaLabel: "Kids · Room 1",
+      active: true, joinedAt: serverTimestamp(), joinedBy: "kids-2"
+    }));
+    const otherDb = env.authenticatedContext("kids", { email: "kids@example.org", email_verified: true }).firestore();
+    await assertFails(setDoc(doc(otherDb, "ministries", ministryId, "serviceSessions", "session", "volunteerAssignments", "kids"), {
+      memberUid: "kids", displayName: "Kids Volunteer", assignmentRole: "Ministry Lead",
+      groupId: "group", roomId: "room", servingAreaLabel: "Kids · Room 1",
+      active: true, joinedAt: serverTimestamp(), joinedBy: "kids"
+    }));
+    await assertFails(updateDoc(ownAssignment, {
+      groupId: "sibling-group", roomId: "room", servingAreaLabel: "Forged placement",
+      assignmentUpdatedAt: serverTimestamp(), assignmentUpdatedBy: "kids-2"
     }));
   });
 
@@ -111,6 +178,26 @@ describe("Firestore ministry boundaries", () => {
     });
     await assertSucceeds(batch.commit());
     await assertFails(updateDoc(doc(db, "ministries", ministryId, "serviceSessions", "session"), { scheduleName: "Changed by volunteer" }));
+  });
+
+  it("lets a Kids Church Volunteer close an open service with an audit entry", async () => {
+    const db = env.authenticatedContext("kids", { email: "kids@example.org", email_verified: true }).firestore();
+    const sessionRef = doc(db, "ministries", ministryId, "serviceSessions", "session");
+    await assertFails(updateDoc(sessionRef, {
+      status: "CLOSED", closedAt: serverTimestamp(), closedBy: "someone-else",
+      updatedAt: serverTimestamp(), updatedBy: "kids"
+    }));
+    const batch = writeBatch(db);
+    batch.update(sessionRef, {
+      status: "CLOSED", closedAt: serverTimestamp(), closedBy: "kids",
+      updatedAt: serverTimestamp(), updatedBy: "kids"
+    });
+    batch.set(doc(db, "ministries", ministryId, "auditLogs", "close-session"), {
+      eventType: "SERVICE_SESSION_CLOSED", actorUid: "kids", actorName: "Kids Volunteer",
+      targetCollection: "serviceSessions", targetId: "session", timestamp: serverTimestamp(),
+      reason: "Service closed after all children were released", applicationSource: "KIDS_CHURCH_VOLUNTEER"
+    });
+    await assertSucceeds(batch.commit());
   });
 
   it("lets a Kids Church Volunteer move checked-in children after an audited room change", async () => {

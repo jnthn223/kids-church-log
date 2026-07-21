@@ -51,8 +51,13 @@ export function ServiceSessionOpener() {
         ? `${result.session.scheduleName} is open. The Sunday team can now join and set today’s rooms.`
         : `${result.session.scheduleName} was already open, so no duplicate was created.`);
     } catch (value) {
-      setError(value instanceof Error && value.message === "SERVICE_SESSION_ALREADY_FINISHED"
-        ? "A completed or cancelled session already exists for that schedule and date. Reopening requires an explicit correction workflow."
+      const code = value instanceof Error ? value.message : "";
+      setError(code === "SERVICE_SESSION_CLOSED"
+        ? `This service was already closed for ${date}. Its attendance and checkout history is final and cannot be overwritten. Use a different date or create a distinctly named on-demand gathering if this is a separate event.`
+        : code === "SERVICE_SESSION_CANCELLED"
+        ? `This service was cancelled for ${date}. Review the cancellation before creating any replacement gathering.`
+        : code === "SERVICE_SESSION_ALREADY_FINISHED"
+        ? `A completed service record already exists for ${date}. Reopening requires an explicit correction workflow so historical attendance remains trustworthy.`
         : "The service could not be opened.");
     } finally { setBusy(false); }
   }

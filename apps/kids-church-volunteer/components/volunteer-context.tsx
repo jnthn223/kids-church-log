@@ -10,10 +10,13 @@ import {
 } from "react";
 import {
   loadSessionContext,
+  recordVolunteerSessionParticipation,
   subscribeToSessionAttendance,
+  useAuthAccess,
   useMinistryCollection,
   type SessionContext
 } from "@kcl/firebase";
+import type { VolunteerServingAreaInput } from "@kcl/firebase";
 import type { Attendance, ServiceSession } from "@kcl/types";
 
 const SESSION_KEY = "kcl-volunteer-session";
@@ -26,7 +29,7 @@ type VolunteerContextValue = {
   attendanceError: string;
   online: boolean;
   selecting: boolean;
-  selectSession(session: ServiceSession): Promise<void>;
+  selectSession(session: ServiceSession, servingArea: VolunteerServingAreaInput): Promise<void>;
   refreshSession(): Promise<void>;
   leaveSession(): void;
 };
@@ -34,6 +37,7 @@ type VolunteerContextValue = {
 const VolunteerContext = createContext<VolunteerContextValue | null>(null);
 
 export function VolunteerOperationsProvider({ children }: { children: ReactNode }) {
+  const { member } = useAuthAccess();
   const source = useMinistryCollection<ServiceSession>("serviceSessions");
   const [sessionContext, setSessionContext] = useState<SessionContext | null>(null);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
@@ -41,16 +45,20 @@ export function VolunteerOperationsProvider({ children }: { children: ReactNode 
   const [online, setOnline] = useState(true);
   const [selecting, setSelecting] = useState(false);
 
-  const selectSession = useCallback(async (session: ServiceSession) => {
+  const selectSession = useCallback(async (session: ServiceSession, servingArea: VolunteerServingAreaInput) => {
+    if (!member) throw new Error("VOLUNTEER_IDENTITY_MISSING");
     setSelecting(true);
     try {
+      if (session.status === "OPEN") {
+        await recordVolunteerSessionParticipation(member, session.id, servingArea);
+      }
       const context = await loadSessionContext(session);
       setSessionContext(context);
       localStorage.setItem(SESSION_KEY, session.id);
     } finally {
       setSelecting(false);
     }
-  }, []);
+  }, [member]);
 
   const leaveSession = useCallback(() => {
     localStorage.removeItem(SESSION_KEY);
@@ -85,20 +93,27 @@ export function VolunteerOperationsProvider({ children }: { children: ReactNode 
     const session = source.data.find(
       (item) => item.id === saved && item.status === "OPEN"
     );
-    if (session) void selectSession(session);
+    if (session) void loadSessionContext(session).then((context) => {
+      setSessionContext(context);
+      localStorage.setItem(SESSION_KEY, session.id);
+    });
     else if (saved) localStorage.removeItem(SESSION_KEY);
   }, [source.loading, source.data, sessionContext, selectSession]);
 
   useEffect(() => {
     if (!sessionContext) return;
     const current = source.data.find((item) => item.id === sessionContext.session.id);
+    if (current && current.status !== "OPEN") {
+      leaveSession();
+      return;
+    }
     if (
       current &&
       (current.revision || 0) !== (sessionContext.session.revision || 0)
     ) {
       void loadSessionContext(current).then(setSessionContext);
     }
-  }, [source.data, sessionContext]);
+  }, [source.data, sessionContext, leaveSession]);
 
   useEffect(() => {
     if (!sessionContext) return;

@@ -26,6 +26,8 @@ export function AttendanceScreen() {
         date: attendance.localServiceDate,
         group: attendance.groupNameSnapshot,
         room: attendance.roomNameSnapshot,
+        differentPlacement: attendance.placementOverridden ? "Yes" : "No",
+        placementReason: attendance.placementOverrideReason || "",
         status: attendance.status
       }))
     );
@@ -53,7 +55,7 @@ export function AttendanceScreen() {
           description="Committed check-ins will appear here after the Kids Church Volunteer app launches."
         />
       ) : (
-        <DataTable headers={["Child", "Family", "Date", "Group", "Room", "Status"]}>
+        <DataTable headers={["Child", "Family", "Date", "Group", "Room", "Placement", "Status"]}>
           {rows.map((attendance) => (
             <tr key={attendance.id}>
               <td><strong>{attendance.childNameSnapshot}</strong></td>
@@ -61,6 +63,7 @@ export function AttendanceScreen() {
               <td>{attendance.localServiceDate || "—"}</td>
               <td>{attendance.groupNameSnapshot}</td>
               <td>{attendance.roomNameSnapshot}</td>
+              <td>{attendance.placementOverridden ? attendance.placementOverrideReason || "Different from registration" : "Registered group"}</td>
               <td>
                 <StatusChip tone={attendance.status === "CHECKED_IN" ? "warning" : "success"}>
                   {attendance.status.replace("_", " ")}

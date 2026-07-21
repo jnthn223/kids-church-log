@@ -56,6 +56,18 @@ export type SessionRoomMappingInput = {
   capacity?: number;
 };
 
+export type CheckInPlacementInput = {
+  childId: string;
+  groupId: string;
+  overrideReason?: string;
+};
+
+export type VolunteerServingAreaInput = {
+  groupId: string;
+  roomId: string;
+  servingAreaLabel: string;
+};
+
 function serviceSessionId(input: OpenServiceInput) {
   const safeScheduleId = input.scheduleId
     .trim()
@@ -69,8 +81,20 @@ function serviceSessionId(input: OpenServiceInput) {
 export async function openServiceSession(
   actor: MinistryMember,
   input: OpenServiceInput,
-  applicationSource: ApplicationSource
+  applicationSource: ApplicationSource,
+  mappings: SessionRoomMappingInput[] = [],
+  servingArea: VolunteerServingAreaInput = {
+    groupId: "",
+    roomId: "",
+    servingAreaLabel: "Check-in / service-wide"
+  }
 ) {
+  if (applicationSource === "KIDS_CHURCH_VOLUNTEER" && !mappings.length) {
+    throw new Error("ROOM_MAPPINGS_REQUIRED");
+  }
+  if (new Set(mappings.map((mapping) => mapping.groupId)).size !== mappings.length) {
+    throw new Error("DUPLICATE_GROUP_MAPPING");
+  }
   const db = getFirebaseDb();
   const sessionId = serviceSessionId(input);
   const sessionRef = doc(
@@ -87,6 +111,8 @@ export async function openServiceSession(
     if (existing.exists()) {
       const session = { id: existing.id, ...existing.data() } as ServiceSession;
       if (session.status === "OPEN") return { session, created: false };
+      if (session.status === "CLOSED") throw new Error("SERVICE_SESSION_CLOSED");
+      if (session.status === "CANCELLED") throw new Error("SERVICE_SESSION_CANCELLED");
       throw new Error("SERVICE_SESSION_ALREADY_FINISHED");
     }
 
@@ -109,6 +135,26 @@ export async function openServiceSession(
       updatedAt: serverTimestamp(),
       updatedBy: actor.userId
     });
+    mappings.forEach((mapping) => {
+      transaction.set(doc(sessionRef, "roomAssignments", mapping.groupId), {
+        ...mapping,
+        capacity: mapping.capacity || null,
+        active: true,
+        updatedAt: serverTimestamp(),
+        updatedBy: actor.userId
+      });
+    });
+    transaction.set(doc(sessionRef, "volunteerAssignments", actor.userId), {
+      memberUid: actor.userId,
+      displayName: actor.displayName,
+      assignmentRole: "Service opener",
+      groupId: servingArea.groupId,
+      roomId: servingArea.roomId,
+      servingAreaLabel: servingArea.servingAreaLabel,
+      active: true,
+      joinedAt: serverTimestamp(),
+      joinedBy: actor.userId
+    });
     transaction.set(auditRef, {
       eventType: "SERVICE_SESSION_OPENED",
       actorUid: actor.userId,
@@ -116,14 +162,117 @@ export async function openServiceSession(
       targetCollection: "serviceSessions",
       targetId: sessionId,
       timestamp: serverTimestamp(),
-      reason: input.sessionKind === "ON_DEMAND"
-        ? "On-demand service opened"
-        : "Scheduled service opened",
+      reason: `${input.sessionKind === "ON_DEMAND" ? "On-demand" : "Scheduled"} service opened${mappings.length ? ` with ${mappings.length} group-room placements` : ""}`,
       applicationSource
     });
     return { session: { id: sessionId, ...session } as ServiceSession, created: true };
   });
   return result;
+}
+
+export async function recordVolunteerSessionParticipation(
+  actor: MinistryMember,
+  sessionId: string,
+  servingArea: VolunteerServingAreaInput
+) {
+  const db = getFirebaseDb();
+  const sessionRef = doc(db, "ministries", ministryId, "serviceSessions", sessionId);
+  const assignmentRef = doc(sessionRef, "volunteerAssignments", actor.userId);
+  const auditRef = doc(collection(db, "ministries", ministryId, "auditLogs"));
+  return runTransaction(db, async (transaction) => {
+    const [sessionSnapshot, assignmentSnapshot] = await Promise.all([
+      transaction.get(sessionRef),
+      transaction.get(assignmentRef)
+    ]);
+    if (!sessionSnapshot.exists() || sessionSnapshot.data().status !== "OPEN") {
+      throw new Error("SESSION_NOT_OPEN");
+    }
+    if (assignmentSnapshot.exists()) {
+      const current = assignmentSnapshot.data();
+      if (
+        String(current.groupId || "") === servingArea.groupId &&
+        String(current.roomId || "") === servingArea.roomId &&
+        String(current.servingAreaLabel || "") === servingArea.servingAreaLabel
+      ) return false;
+      transaction.update(assignmentRef, {
+        groupId: servingArea.groupId,
+        roomId: servingArea.roomId,
+        servingAreaLabel: servingArea.servingAreaLabel,
+        assignmentUpdatedAt: serverTimestamp(),
+        assignmentUpdatedBy: actor.userId
+      });
+      transaction.set(auditRef, {
+        eventType: "SERVICE_VOLUNTEER_AREA_UPDATED",
+        actorUid: actor.userId,
+        actorName: actor.displayName,
+        targetCollection: "serviceSessions",
+        targetId: sessionId,
+        timestamp: serverTimestamp(),
+        reason: `Serving area selected: ${servingArea.servingAreaLabel}`,
+        applicationSource: "KIDS_CHURCH_VOLUNTEER"
+      });
+      return true;
+    }
+    transaction.set(assignmentRef, {
+      memberUid: actor.userId,
+      displayName: actor.displayName,
+      assignmentRole: "Session volunteer",
+      groupId: servingArea.groupId,
+      roomId: servingArea.roomId,
+      servingAreaLabel: servingArea.servingAreaLabel,
+      active: true,
+      joinedAt: serverTimestamp(),
+      joinedBy: actor.userId
+    });
+    transaction.set(auditRef, {
+      eventType: "SERVICE_VOLUNTEER_JOINED",
+      actorUid: actor.userId,
+      actorName: actor.displayName,
+      targetCollection: "serviceSessions",
+      targetId: sessionId,
+      timestamp: serverTimestamp(),
+      reason: `Volunteer joined service operations: ${servingArea.servingAreaLabel}`,
+      applicationSource: "KIDS_CHURCH_VOLUNTEER"
+    });
+    return true;
+  });
+}
+
+export async function closeServiceSession(
+  actor: MinistryMember,
+  sessionId: string,
+  attendanceRecords: Attendance[],
+  applicationSource: ApplicationSource
+) {
+  const stillCheckedIn = attendanceRecords.filter((record) => record.status === "CHECKED_IN");
+  if (stillCheckedIn.length) throw new Error("CHILDREN_STILL_CHECKED_IN");
+  const db = getFirebaseDb();
+  const sessionRef = doc(db, "ministries", ministryId, "serviceSessions", sessionId);
+  const auditRef = doc(collection(db, "ministries", ministryId, "auditLogs"));
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(sessionRef);
+    if (!snapshot.exists() || snapshot.data().status !== "OPEN") {
+      throw new Error("SESSION_NOT_OPEN");
+    }
+    transaction.update(sessionRef, {
+      status: "CLOSED",
+      closedAt: serverTimestamp(),
+      closedBy: actor.userId,
+      updatedAt: serverTimestamp(),
+      updatedBy: actor.userId
+    });
+    transaction.set(auditRef, {
+      eventType: "SERVICE_SESSION_CLOSED",
+      actorUid: actor.userId,
+      actorName: actor.displayName,
+      targetCollection: "serviceSessions",
+      targetId: sessionId,
+      timestamp: serverTimestamp(),
+      reason: "Service closed after all children were released",
+      applicationSource
+    });
+    return { id: snapshot.id, ...snapshot.data(), status: "CLOSED" as const };
+  });
 }
 
 export async function saveSessionRoomMappings(
@@ -132,7 +281,8 @@ export async function saveSessionRoomMappings(
   expectedRevision: number,
   mappings: SessionRoomMappingInput[],
   reason: string,
-  applicationSource: ApplicationSource
+  applicationSource: ApplicationSource,
+  attendanceRecords: Attendance[] = []
 ) {
   if (!mappings.length) throw new Error("ROOM_MAPPINGS_REQUIRED");
   if (reason.trim().length < 5) throw new Error("ROOM_MAPPING_REASON_REQUIRED");
@@ -145,6 +295,16 @@ export async function saveSessionRoomMappings(
     sessionId
   );
   const auditRef = doc(collection(db, "ministries", ministryId, "auditLogs"));
+  const existingAssignments = await getDocs(collection(sessionRef, "roomAssignments"));
+  const selectedGroupIds = new Set(mappings.map((mapping) => mapping.groupId));
+  const removedAssignments = existingAssignments.docs.filter(
+    (item) => item.data().active === true && !selectedGroupIds.has(String(item.data().groupId || item.id))
+  );
+  if (removedAssignments.some((assignment) => attendanceRecords.some(
+    (record) => record.status === "CHECKED_IN" && record.groupId === assignment.data().groupId
+  ))) {
+    throw new Error("PLACEMENT_HAS_CHECKED_IN_CHILDREN");
+  }
 
   return runTransaction(db, async (transaction) => {
     const sessionSnapshot = await transaction.get(sessionRef);
@@ -171,6 +331,13 @@ export async function saveSessionRoomMappings(
         },
         { merge: true }
       );
+    });
+    removedAssignments.forEach((assignment) => {
+      transaction.set(assignment.ref, {
+        active: false,
+        updatedAt: serverTimestamp(),
+        updatedBy: actor.userId
+      }, { merge: true });
     });
     transaction.update(sessionRef, {
       revision: currentRevision + 1,
@@ -379,7 +546,7 @@ export async function checkInChildren(
   actor: MinistryMember,
   context: SessionContext,
   family: OperationalFamily,
-  childIds: string[],
+  placements: CheckInPlacementInput[],
   method: CheckMethod
 ) {
   const db = getFirebaseDb();
@@ -397,16 +564,25 @@ export async function checkInChildren(
     "households",
     family.household.id
   );
-  const selections = childIds.map((childId) => {
-    const child = family.children.find((item) => item.id === childId);
+  const selections = placements.map((placement) => {
+    const child = family.children.find((item) => item.id === placement.childId);
     if (!child || !child.active) throw new Error("CHILD_INACTIVE");
     const assignment = context.roomAssignments.find(
-      (item) => item.groupId === child.ministryGroupId
+      (item) => item.groupId === placement.groupId
     );
     if (!assignment) throw new Error("ROOM_ASSIGNMENT_MISSING");
+    const registeredGroupId = child.ministryGroupId || "";
+    const placementOverridden = registeredGroupId !== assignment.groupId;
+    const overrideReason = placement.overrideReason?.trim() || "";
+    if (placementOverridden && overrideReason.length < 3) {
+      throw new Error("PLACEMENT_OVERRIDE_REASON_REQUIRED");
+    }
     return {
       child,
       assignment,
+      registeredGroupId,
+      placementOverridden,
+      overrideReason,
       childRef: doc(db, "ministries", ministryId, "children", child.id),
       attendanceRef: doc(
         db,
@@ -429,6 +605,11 @@ export async function checkInChildren(
     const childSnapshots = await Promise.all(
       selections.map((selection) => transaction.get(selection.childRef))
     );
+    const assignmentSnapshots = await Promise.all(
+      selections.map((selection) => transaction.get(
+        doc(sessionRef, "roomAssignments", selection.assignment.groupId)
+      ))
+    );
     const attendanceSnapshots = await Promise.all(
       selections.map((selection) => transaction.get(selection.attendanceRef))
     );
@@ -443,9 +624,22 @@ export async function checkInChildren(
       throw new Error("FAMILY_PASS_INACTIVE");
     }
     const results: Array<{ childId: string; status: "CREATED" | "ALREADY_CHECKED_IN" }> = [];
-    selections.forEach(({ child, assignment, attendanceRef }, index) => {
+    selections.forEach(({ child, assignment, registeredGroupId, placementOverridden, overrideReason, attendanceRef }, index) => {
       if (!childSnapshots[index].exists() || childSnapshots[index].data().active !== true) {
         throw new Error("CHILD_INACTIVE");
+      }
+      if (String(childSnapshots[index].data().ministryGroupId || "") !== registeredGroupId) {
+        throw new Error("CHILD_PLACEMENT_CHANGED");
+      }
+      const currentAssignment = assignmentSnapshots[index];
+      if (
+        !currentAssignment.exists() ||
+        currentAssignment.data().active !== true ||
+        currentAssignment.data().groupName !== assignment.groupName ||
+        currentAssignment.data().roomId !== assignment.roomId ||
+        currentAssignment.data().roomName !== assignment.roomName
+      ) {
+        throw new Error("SESSION_PLACEMENT_CHANGED");
       }
       if (attendanceSnapshots[index].exists()) {
         results.push({ childId: child.id, status: "ALREADY_CHECKED_IN" });
@@ -460,10 +654,13 @@ export async function checkInChildren(
         scheduleId: context.session.scheduleId,
         scheduleNameSnapshot: context.session.scheduleName,
         localServiceDate: context.session.localServiceDate,
-        groupId: child.ministryGroupId,
+        groupId: assignment.groupId,
         groupNameSnapshot: assignment.groupName,
         roomId: assignment.roomId,
         roomNameSnapshot: assignment.roomName,
+        registeredGroupId,
+        placementOverridden,
+        placementOverrideReason: placementOverridden ? overrideReason : "",
         status: "CHECKED_IN",
         checkInAt: serverTimestamp(),
         checkInBy: actor.userId,
