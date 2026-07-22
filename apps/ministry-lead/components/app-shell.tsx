@@ -11,6 +11,7 @@ import {
   ClipboardList,
   FileClock,
   Home,
+  LifeBuoy,
   LogOut,
   Menu,
   Settings,
@@ -19,7 +20,7 @@ import {
   X,
   type LucideIcon
 } from "lucide-react";
-import { BrandMark, Button } from "@kcl/ui";
+import { BrandMark, Button, requestSupportReport } from "@kcl/ui";
 import { useAuthAccess } from "@kcl/firebase";
 
 type NavigationItem = {
@@ -94,6 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="sidebar-bottom">
+          <button className="sidebar-support" type="button" onClick={() => requestSupportReport()}><LifeBuoy size={18} /> Help & support</button>
           <Link className="identity" href="/account/" prefetch>
             <span className="avatar">{initial}</span>
             <span><strong>{member.displayName}</strong><small>Ministry Lead</small></span>

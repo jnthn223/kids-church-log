@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AuthAccessProvider } from "@kcl/firebase";
+import { SupportReporter } from "@kcl/ui";
+import "@kcl/ui/support-report.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,6 +29,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         >
           {children}
         </AuthAccessProvider>
+        <SupportReporter appName="Kids Church Volunteer" />
       </body>
     </html>
   );

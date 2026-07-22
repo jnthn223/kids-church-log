@@ -1,5 +1,8 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 
+export { buildSupportReport, createSupportReference, KCL_SUPPORT_EMAIL, requestSupportReport, sanitizeSupportDescription, SupportErrorFallback, SupportReporter, SupportReportLink } from "./support-report";
+export type { SupportReportContext, SupportReportInput } from "./support-report";
+
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return <div className="brand" aria-label="Kids Church Log"><span className="brand-shapes" aria-hidden="true"><i className="shape triangle"/><i className="shape square"/><i className="shape circle"/></span>{!compact && <span className="brand-name">Kids Church <b>Log</b></span>}</div>;
 }

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AuthAccessProvider } from "@kcl/firebase";
+import { SupportReporter } from "@kcl/ui";
+import "@kcl/ui/support-report.css";
 import "./globals.css";
 
 export const metadata: Metadata = { title: { default: "Registration · KidsChurchLog", template: "%s · KidsChurchLog" }, description: "Welcoming, assisted family registration.", applicationName: "KidsChurchLog Admin Volunteer" };
@@ -14,5 +16,5 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
   };
 
-  return <html lang="en"><body><AuthAccessProvider requiredRole="ADMIN_VOLUNTEER" firebaseConfig={firebaseConfig}>{children}</AuthAccessProvider></body></html>;
+  return <html lang="en"><body><AuthAccessProvider requiredRole="ADMIN_VOLUNTEER" firebaseConfig={firebaseConfig}>{children}</AuthAccessProvider><SupportReporter appName="Admin Volunteer" /></body></html>;
 }

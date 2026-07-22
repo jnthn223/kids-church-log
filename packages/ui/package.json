@@ -1,1 +1,1 @@
-{ "name": "@kcl/ui", "version": "0.1.0", "private": true, "type": "module", "exports": { ".": "./src/index.tsx" }, "peerDependencies": { "react": "^18.3.1" } }
+{ "name": "@kcl/ui", "version": "0.1.0", "private": true, "type": "module", "exports": { ".": "./src/index.tsx", "./support-report.css": "./src/support-report.css" }, "peerDependencies": { "react": "^18.3.1" } }
