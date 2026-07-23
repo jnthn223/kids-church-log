@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 export const KCL_SUPPORT_EMAIL = "kidschurchlog@googlegroups.com";
+export const WHYTHOUGH_PORTFOLIO_URL = "https://whythough-space.web.app/";
 export const SUPPORT_REPORT_EVENT = "kcl:support-report";
 
 export type SupportReportContext = {
@@ -77,6 +78,10 @@ export function SupportErrorFallback({ error, reset }: { error: Error & { digest
 
 export function SupportReportLink({ label = "Need help?", className = "", context = {} }: { label?: string; className?: string; context?: SupportReportContext }) {
   return <button className={`support-report-link ${className}`} type="button" onClick={() => requestSupportReport(context)}>{label}</button>;
+}
+
+export function CreatorCredit({ className = "" }: { className?: string }) {
+  return <a className={`creator-credit ${className}`} href={WHYTHOUGH_PORTFOLIO_URL} target="_blank" rel="noopener noreferrer">Built with care by <strong>whyThough</strong></a>;
 }
 
 export function SupportReporter({ appName, appVersion = "0.1.0", showTrigger = false, showPublicHelp = true }: { appName: string; appVersion?: string; showTrigger?: boolean; showPublicHelp?: boolean }) {

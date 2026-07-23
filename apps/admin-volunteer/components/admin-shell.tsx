@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Baby, BadgeCheck, Home, LifeBuoy, LogOut, Menu, UserRound, Users, UserPlus, X, type LucideIcon } from "lucide-react";
-import { BrandMark, Button, requestSupportReport } from "@kcl/ui";
+import { BrandMark, Button, CreatorCredit, requestSupportReport } from "@kcl/ui";
 import { useAuthAccess } from "@kcl/firebase";
 
 const navigation: Array<{ href: string; label: string; icon: LucideIcon }> = [
@@ -19,7 +19,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const page = navigation.find((item) => pathname.startsWith(item.href));
   return <div className="app-frame"><div className={`mobile-scrim ${open ? "open" : ""}`} onClick={() => setOpen(false)} />
     <aside className={`sidebar ${open ? "open" : ""}`}><BrandMark /><p className="app-label">Registration team</p><nav className="nav" aria-label="Admin Volunteer navigation">{navigation.map((item) => { const Icon = item.icon; const active = pathname === item.href || (item.href !== "/home/" && pathname.startsWith(item.href)); return <Link key={item.href} href={item.href} className={active ? "active" : ""} onClick={() => setOpen(false)}><Icon size={20} />{item.label}</Link>; })}</nav>
-      <div className="sidebar-bottom"><button className="sidebar-support" type="button" onClick={() => requestSupportReport()}><LifeBuoy size={18} /> Help & support</button><Link className="identity" href="/account/"><span className="avatar">{member.displayName.charAt(0) || "A"}</span><span><strong>{member.displayName}</strong><small>Admin Volunteer</small></span></Link><Button variant="ghost" onClick={() => { localStorage.removeItem("kcl-admin-registration-draft"); void signOutUser(); }}><LogOut size={17} /> Sign out</Button></div></aside>
+      <div className="sidebar-bottom"><button className="sidebar-support" type="button" onClick={() => requestSupportReport()}><LifeBuoy size={18} /> Help & support</button><Link className="identity" href="/account/"><span className="avatar">{member.displayName.charAt(0) || "A"}</span><span><strong>{member.displayName}</strong><small>Admin Volunteer</small></span></Link><CreatorCredit /><Button variant="ghost" onClick={() => { localStorage.removeItem("kcl-admin-registration-draft"); void signOutUser(); }}><LogOut size={17} /> Sign out</Button></div></aside>
     <main className="main"><header className="topbar"><Button className="mobile-menu" variant="ghost" aria-label="Open menu" onClick={() => setOpen(!open)}>{open ? <X /> : <Menu />}</Button><div><small>Admin Volunteer</small><h1>{page?.label || "Registration"}</h1></div><span className="privacy-note">Family information stays private</span></header><div className="content">{children}</div></main>
   </div>;
 }

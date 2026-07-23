@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 
-export { buildSupportReport, createSupportReference, KCL_SUPPORT_EMAIL, requestSupportReport, sanitizeSupportDescription, SupportErrorFallback, SupportReporter, SupportReportLink } from "./support-report";
+export { buildSupportReport, createSupportReference, CreatorCredit, KCL_SUPPORT_EMAIL, requestSupportReport, sanitizeSupportDescription, SupportErrorFallback, SupportReporter, SupportReportLink, WHYTHOUGH_PORTFOLIO_URL } from "./support-report";
 export type { SupportReportContext, SupportReportInput } from "./support-report";
 
 export function BrandMark({ compact = false }: { compact?: boolean }) {

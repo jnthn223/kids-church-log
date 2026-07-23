@@ -7,12 +7,13 @@ import {
   BarChart3,
   CheckCircle2,
   ClipboardCheck,
+  ExternalLink,
   QrCode,
   ShieldCheck,
   Sparkles,
   Users
 } from "lucide-react";
-import { BrandMark, Button } from "@kcl/ui";
+import { BrandMark, Button, WHYTHOUGH_PORTFOLIO_URL } from "@kcl/ui";
 import { useAuthAccess } from "@kcl/firebase";
 import type { MinistryRole } from "@kcl/types";
 
@@ -80,6 +81,23 @@ export default function Home() {
         </nav>
       </header>
 
+      {accessReady && approvedProducts.length > 0 && (
+        <section className="workspace-strip" id="workspaces" aria-label="Your workspaces">
+          <div>
+            <span className="workspace-avatar">{member?.displayName.charAt(0) || "T"}</span>
+            <div><small>Signed in as {user?.email}</small><h2>Welcome, {member?.displayName}</h2></div>
+          </div>
+          <div className="workspace-links">
+            {approvedProducts.map((product) => (
+              <a key={product.role} className="button button-secondary" href={product.href}>
+                Open {product.label} <ArrowRight size={17} />
+              </a>
+            ))}
+            <Button variant="ghost" onClick={() => void signOutUser()}>Sign out</Button>
+          </div>
+        </section>
+      )}
+
       <section className="landing-hero">
         <div className="landing-hero-copy">
           <span className="landing-kicker"><Sparkles size={15} /> Built for the whole Kids Church team</span>
@@ -106,23 +124,6 @@ export default function Home() {
           <div className="visual-card visual-release"><span><ShieldCheck /></span><div><small>Verified release</small><strong>Authorized guardian</strong></div><CheckCircle2 /></div>
         </div>
       </section>
-
-      {accessReady && approvedProducts.length > 0 && (
-        <section className="workspace-strip" id="workspaces">
-          <div>
-            <span className="workspace-avatar">{member?.displayName.charAt(0) || "T"}</span>
-            <div><small>Signed in as {user?.email}</small><h2>Welcome, {member?.displayName}</h2></div>
-          </div>
-          <div className="workspace-links">
-            {approvedProducts.map((product) => (
-              <a key={product.role} className="button button-secondary" href={product.href}>
-                Open {product.label} <ArrowRight size={17} />
-              </a>
-            ))}
-            <Button variant="ghost" onClick={() => void signOutUser()}>Sign out</Button>
-          </div>
-        </section>
-      )}
 
       <section className="landing-section" id="products">
         <div className="landing-section-head">
@@ -165,9 +166,24 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="maker-section" aria-labelledby="maker-title">
+        <div className="maker-monogram" aria-hidden="true">wT</div>
+        <div className="maker-copy">
+          <span>Built with care by <strong>whyThough</strong></span>
+          <h2 id="maker-title">Thoughtful ideas, made useful.</h2>
+          <p>
+            KidsChurchLog was designed and built by whyThough with a simple belief: technology
+            should feel human, serve real needs, and stay out of the way of meaningful work.
+          </p>
+        </div>
+        <a className="maker-link" href={WHYTHOUGH_PORTFOLIO_URL} target="_blank" rel="noopener noreferrer">
+          Visit whyThough <ExternalLink size={17} />
+        </a>
+      </section>
+
       <footer className="landing-footer">
         <BrandMark />
-        <p>A portfolio project for thoughtful, accessible Kids Church operations.</p>
+        <p>Thoughtful, accessible tools for Kids Church operations.</p>
         <Link href="/sign-in/">Team sign in <ArrowRight size={15} /></Link>
       </footer>
     </main>

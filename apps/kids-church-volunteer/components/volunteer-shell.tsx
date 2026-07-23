@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ClipboardCheck, DoorOpen, LifeBuoy, LogOut, QrCode, UserRound, WifiOff, type LucideIcon } from "lucide-react";
-import { BrandMark, Button, requestSupportReport } from "@kcl/ui";
+import { BrandMark, Button, CreatorCredit, requestSupportReport } from "@kcl/ui";
 import { useAuthAccess } from "@kcl/firebase";
 import { VolunteerOperationsProvider, useVolunteerOperations } from "./volunteer-context";
 
@@ -33,7 +33,7 @@ function ShellFrame({ children }: { children: ReactNode }) {
   const { sessionContext, online } = useVolunteerOperations();
   return <div className="volunteer-app">
     <header className="station-header"><BrandMark /><div className="station-state"><strong>{sessionContext?.session.scheduleName || "No service selected"}</strong><span className={online ? "online" : "offline"}>{online ? "Connected" : <><WifiOff size={14} /> Offline</>}</span></div></header>
-    <main className="station-content">{children}{pathname.startsWith("/account/") && <button className="more-support-entry card" type="button" onClick={() => requestSupportReport()}><LifeBuoy /><span><strong>Help & support</strong><small>Report a problem or contact KidsChurchLog Support</small></span><span aria-hidden="true">›</span></button>}</main>
+    <main className="station-content">{children}{pathname.startsWith("/account/") && <div className="more-utilities"><button className="more-support-entry card" type="button" onClick={() => requestSupportReport()}><LifeBuoy /><span><strong>Help & support</strong><small>Report a problem or contact KidsChurchLog Support</small></span><span aria-hidden="true">›</span></button><CreatorCredit /></div>}</main>
     <nav className="bottom-nav" aria-label="Sunday Team navigation">{navigation.map((item) => { const Icon = item.icon; const active = pathname.startsWith(item.href); return <Link key={item.href} className={active ? "active" : ""} href={item.href}><Icon size={23} /><span>{item.label}</span></Link>; })}</nav>
     <div className="desktop-account"><span className="avatar">{member?.displayName.charAt(0) || "V"}</span><span><strong>{member?.displayName}</strong><small>Kids Church Volunteer</small></span><Button variant="ghost" aria-label="Sign out" onClick={() => void signOutUser()}><LogOut size={18} /></Button></div>
   </div>;

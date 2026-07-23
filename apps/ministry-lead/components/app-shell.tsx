@@ -20,7 +20,7 @@ import {
   X,
   type LucideIcon
 } from "lucide-react";
-import { BrandMark, Button, requestSupportReport } from "@kcl/ui";
+import { BrandMark, Button, CreatorCredit, requestSupportReport } from "@kcl/ui";
 import { useAuthAccess } from "@kcl/firebase";
 
 type NavigationItem = {
@@ -100,6 +100,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="avatar">{initial}</span>
             <span><strong>{member.displayName}</strong><small>Ministry Lead</small></span>
           </Link>
+          <CreatorCredit />
           <Button variant="ghost" onClick={() => void signOutUser()}>
             <LogOut size={17} /> Sign out
           </Button>
